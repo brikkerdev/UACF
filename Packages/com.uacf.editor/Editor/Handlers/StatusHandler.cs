@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using UnityEngine;
 using UnityEditor;
 using UnityEngine.SceneManagement;
@@ -10,10 +11,18 @@ namespace UACF.Handlers
     {
         public static void Register(RequestRouter router)
         {
+            router.Register("GET", "/api/ping", HandlePing);
             router.Register("GET", "/api/status", HandleStatus);
         }
 
-        private static async System.Threading.Tasks.Task HandleStatus(RequestContext ctx)
+        /// <summary>Lightweight health check - no Unity API, no main thread. Use when /api/status hangs (e.g. main thread blocked).</summary>
+        private static Task HandlePing(RequestContext ctx)
+        {
+            ctx.RespondOk(new { ok = true, uptime_seconds = UACFServer.UptimeSeconds });
+            return Task.CompletedTask;
+        }
+
+        private static async Task HandleStatus(RequestContext ctx)
         {
             var data = await MainThreadDispatcher.Enqueue(() =>
             {

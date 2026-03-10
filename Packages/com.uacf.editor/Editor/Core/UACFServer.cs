@@ -123,15 +123,41 @@ namespace UACF.Core
         {
             var sw = Stopwatch.StartNew();
             var statusCode = 500;
+            var path = context.Request.Url?.AbsolutePath ?? "/";
+            var timeoutMs = UACFSettings.instance.RequestTimeoutSeconds * 1000;
 
             try
             {
-                await _router.Route(context);
+                var routeTask = _router.Route(context);
+                var timeoutTask = Task.Delay(timeoutMs);
+                var completed = await Task.WhenAny(routeTask, timeoutTask);
+
+                if (completed == timeoutTask)
+                {
+                    UACFLogger.Log($"Request timeout ({timeoutMs}ms) - editor main thread may be blocked", LogLevel.Warning);
+                    statusCode = 503;
+                    try
+                    {
+                        context.Response.StatusCode = 503;
+                        context.Response.ContentType = "application/json; charset=utf-8";
+                        var body = System.Text.Encoding.UTF8.GetBytes("{\"success\":false,\"error\":{\"code\":\"EDITOR_BUSY\",\"message\":\"Request timed out - editor main thread may be blocked (compilation, modal dialog, etc.)\"}}");
+                        context.Response.ContentLength64 = body.Length;
+                        context.Response.OutputStream.Write(body, 0, body.Length);
+                        context.Response.Close();
+                    }
+                    catch (Exception ex)
+                    {
+                        UACFLogger.Log($"Failed to send timeout response: {ex.Message}", LogLevel.Warning);
+                    }
+                    return;
+                }
+
+                await routeTask;
                 statusCode = context.Response.StatusCode;
             }
             catch (Exception ex)
             {
-                UACFLogger.LogError(context.Request.HttpMethod, context.Request.Url?.AbsolutePath ?? "/", ex.Message, sw.ElapsedMilliseconds);
+                UACFLogger.LogError(context.Request.HttpMethod, path, ex.Message, sw.ElapsedMilliseconds);
                 try
                 {
                     context.Response.StatusCode = 500;
@@ -143,9 +169,9 @@ namespace UACF.Core
             {
                 sw.Stop();
                 if (statusCode >= 500)
-                    UACFLogger.LogError(context.Request.HttpMethod, context.Request.Url?.AbsolutePath ?? "/", $"Status {statusCode}", sw.ElapsedMilliseconds);
+                    UACFLogger.LogError(context.Request.HttpMethod, path, $"Status {statusCode}", sw.ElapsedMilliseconds);
                 else
-                    UACFLogger.LogRequest(context.Request.HttpMethod, context.Request.Url?.AbsolutePath ?? "/", statusCode, sw.ElapsedMilliseconds);
+                    UACFLogger.LogRequest(context.Request.HttpMethod, path, statusCode, sw.ElapsedMilliseconds);
             }
         }
     }
