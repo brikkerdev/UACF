@@ -48,7 +48,9 @@ namespace UACF.Core
             try
             {
                 _listener = new HttpListener();
-                _listener.Prefixes.Add($"http://localhost:{port}/");
+                // Use 127.0.0.1 explicitly: on Linux, "localhost" may bind to IPv6 only,
+                // causing curl/agents to fail (IPv4 timeout) or Bad Request (IPv6 URL parsing).
+                _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
                 _listener.Start();
 
                 _cts = new CancellationTokenSource();
@@ -56,7 +58,7 @@ namespace UACF.Core
                 _listenerThread = new Thread(ListenLoop) { IsBackground = true };
                 _listenerThread.Start();
 
-                UACFLogger.Log($"UACF server started on http://localhost:{port}/");
+                UACFLogger.Log($"UACF server started on http://127.0.0.1:{port}/");
                 return true;
             }
             catch (Exception ex)
