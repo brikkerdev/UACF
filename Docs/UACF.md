@@ -306,6 +306,28 @@ Editor Quit
 
 ### 4.1 Здоровье и статус
 
+#### `GET /api/ping`
+
+Лёгкая проверка доступности сервера. Не использует Unity API и main thread — отвечает всегда, даже когда main thread заблокирован (компиляция, модальное окно). Используйте при зависании `/api/status`.
+
+**Response:**
+```json
+{
+    "success": true,
+    "data": {
+        "ok": true,
+        "uptime_seconds": 3600
+    }
+}
+```
+
+**curl:**
+```bash
+curl http://localhost:7890/api/ping
+```
+
+---
+
 #### `GET /api/status`
 
 Проверка работоспособности сервера.

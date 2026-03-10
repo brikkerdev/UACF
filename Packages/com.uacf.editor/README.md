@@ -32,6 +32,11 @@ Add to your project's `Packages/manifest.json`:
 curl http://localhost:7890/api/status
 ```
 
+### Ping (health check when status hangs)
+```bash
+curl http://localhost:7890/api/ping
+```
+
 ### Compile (wait for completion)
 ```bash
 curl -X POST http://localhost:7890/api/compile/request \
@@ -74,6 +79,7 @@ curl -X POST http://localhost:7890/api/file/write \
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| GET | /api/ping | Health check (no main thread) |
 | GET | /api/status | Server status |
 | POST | /api/assets/refresh | Refresh AssetDatabase |
 | GET | /api/assets/find | Find assets |

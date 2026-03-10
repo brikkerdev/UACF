@@ -16,6 +16,6 @@ Unity 6.3 проект с HTTP API сервером для управления 
 
 1. Откройте проект в Unity Editor
 2. Сервер UACF запускается автоматически на порту 7890
-3. Проверка: `curl http://localhost:7890/api/status`
+3. Проверка: `curl http://localhost:7890/api/status` или `curl http://localhost:7890/api/ping`
 
 Подробнее: [Packages/com.uacf.editor/README.md](Packages/com.uacf.editor/README.md)

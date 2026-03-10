@@ -5,6 +5,7 @@
 ### Added
 
 - HTTP API server in Unity Editor (localhost)
+- GET /api/ping - lightweight health check (no main thread)
 - GET /api/status - server status
 - POST /api/assets/refresh - AssetDatabase refresh
 - GET /api/assets/find - find assets

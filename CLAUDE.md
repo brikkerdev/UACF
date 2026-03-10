@@ -4,7 +4,7 @@ This Unity project has UACF enabled. When the Unity Editor is running, an HTTP A
 
 ## Workflow for AI Agents
 
-1. **Check status**: `curl http://localhost:7890/api/status`
+1. **Check status**: `curl http://localhost:7890/api/status` (or `curl http://localhost:7890/api/ping` for quick health check when status hangs)
 2. **Create/edit C# files** in Assets/ (via file system or `POST /api/file/write`)
 3. **Compile**: `curl -X POST http://localhost:7890/api/compile/request -H "Content-Type: application/json" -d '{"wait":true}'`
 4. **Check errors**: `curl http://localhost:7890/api/compile/errors?severity=error`
@@ -18,6 +18,7 @@ This Unity project has UACF enabled. When the Unity Editor is running, an HTTP A
 | Action | Endpoint |
 |--------|----------|
 | Status | GET /api/status |
+| Ping (health check) | GET /api/ping |
 | Compile & wait | POST /api/compile/request (body: `{"wait":true}`) |
 | Create GameObject | POST /api/gameobject/create |
 | Add component | POST /api/component/add |
