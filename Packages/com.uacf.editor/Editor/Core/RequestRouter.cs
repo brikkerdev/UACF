@@ -27,7 +27,11 @@ namespace UACF.Core
 
         public async Task Route(HttpListenerContext context)
         {
-            var ctx = new RequestContext(context);
+            await Route(new RequestContext(context));
+        }
+
+        public async Task Route(RequestContext ctx)
+        {
             var method = ctx.Method;
             var path = ctx.Path;
 

@@ -32,9 +32,9 @@ Add to your project's `Packages/manifest.json`:
 curl http://localhost:7890/api/status
 ```
 
-### Ping (health check when status hangs)
+### Ping
 ```bash
-curl http://localhost:7890/api/ping
+curl http://127.0.0.1:7890/api/ping
 ```
 
 ### Compile (wait for completion)

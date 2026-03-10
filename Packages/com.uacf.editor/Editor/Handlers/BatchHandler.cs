@@ -43,7 +43,7 @@ namespace UACF.Handlers
             }
 
             var port = server.Port;
-            var baseUrl = $"http://localhost:{port}";
+            var baseUrl = $"http://127.0.0.1:{port}";
             var results = new List<object>();
             var httpClient = new HttpClient { Timeout = System.TimeSpan.FromSeconds(UACFSettings.instance.RequestTimeoutSeconds) };
 

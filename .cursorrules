@@ -7,7 +7,7 @@ This project includes UACF, an HTTP API server in Unity Editor for AI agent cont
 When Unity Editor is running, the UACF server provides these endpoints:
 
 ### Status & Health
-- `GET /api/ping` - Lightweight health check (no main thread); use when /api/status hangs
+- `GET /api/ping` - Health check (no main thread)
 - `GET /api/status` - Server status, Unity version, project info, is_compiling, active_scene, uptime
 
 ### Assets

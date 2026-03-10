@@ -29,7 +29,7 @@ namespace UACF.UI
 
             EditorGUILayout.LabelField("Status:", server.IsRunning ? "Running" : "Stopped");
             EditorGUILayout.LabelField("Port:", server.Port.ToString());
-            EditorGUILayout.LabelField("URL:", $"http://localhost:{server.Port}/");
+            EditorGUILayout.LabelField("URL:", $"http://127.0.0.1:{server.Port}/");
             EditorGUILayout.LabelField("Uptime:", $"{UACFServer.UptimeSeconds} seconds");
 
             EditorGUILayout.Space(10);

@@ -1,16 +1,19 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Net;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using UACF.Config;
+using UACF.Models;
+using Unity.Plastic.Newtonsoft.Json;
 
 namespace UACF.Core
 {
     public class UACFServer
     {
-        private HttpListener _listener;
-        private Thread _listenerThread;
+        private TcpHttpServer _tcpServer;
         private CancellationTokenSource _cts;
         private volatile bool _isRunning;
         private int _port;
@@ -47,18 +50,15 @@ namespace UACF.Core
         {
             try
             {
-                _listener = new HttpListener();
-                // Use 127.0.0.1 explicitly: on Linux, "localhost" may bind to IPv6 only,
-                // causing curl/agents to fail (IPv4 timeout) or Bad Request (IPv6 URL parsing).
-                _listener.Prefixes.Add($"http://127.0.0.1:{port}/");
-                _listener.Start();
+                _tcpServer = new TcpHttpServer(HandleRequestAsync);
+                if (!_tcpServer.Start(port))
+                    return false;
 
+                _port = _tcpServer.Port;
                 _cts = new CancellationTokenSource();
                 _isRunning = true;
-                _listenerThread = new Thread(ListenLoop) { IsBackground = true };
-                _listenerThread.Start();
 
-                UACFLogger.Log($"UACF server started on http://127.0.0.1:{port}/");
+                UACFLogger.Log($"UACF server started on http://127.0.0.1:{_port}/");
                 return true;
             }
             catch (Exception ex)
@@ -74,61 +74,21 @@ namespace UACF.Core
 
             _isRunning = false;
             _cts?.Cancel();
-
-            try
-            {
-                _listener?.Stop();
-                _listener?.Close();
-            }
-            catch (Exception ex)
-            {
-                UACFLogger.Log($"Error stopping server: {ex.Message}", LogLevel.Warning);
-            }
-
-            _listener = null;
+            _tcpServer?.Stop();
+            _tcpServer = null;
             UACFLogger.Log("UACF server stopped");
         }
 
-        private void ListenLoop()
-        {
-            var timeout = UACFSettings.instance.RequestTimeoutSeconds * 1000;
-
-            while (_isRunning && _listener != null && _listener.IsListening)
-            {
-                try
-                {
-                    var contextTask = _listener.GetContextAsync();
-                    if (contextTask.Wait(timeout, _cts.Token))
-                    {
-                        var context = contextTask.Result;
-                        ThreadPool.QueueUserWorkItem(_ =>
-                        {
-                            HandleRequest(context);
-                        });
-                    }
-                }
-                catch (HttpListenerException)
-                {
-                    if (!_isRunning) break;
-                }
-                catch (Exception ex)
-                {
-                    if (_isRunning)
-                        UACFLogger.Log($"Listener error: {ex.Message}", LogLevel.Error);
-                }
-            }
-        }
-
-        private async void HandleRequest(HttpListenerContext context)
+        private async Task HandleRequestAsync(string method, string path, string query, string body, Stream responseStream)
         {
             var sw = Stopwatch.StartNew();
             var statusCode = 500;
-            var path = context.Request.Url?.AbsolutePath ?? "/";
             var timeoutMs = UACFSettings.instance.RequestTimeoutSeconds * 1000;
 
             try
             {
-                var routeTask = _router.Route(context);
+                var ctx = new RequestContext(method, path, query, body, responseStream);
+                var routeTask = _router.Route(ctx);
                 var timeoutTask = Task.Delay(timeoutMs);
                 var completed = await Task.WhenAny(routeTask, timeoutTask);
 
@@ -136,32 +96,21 @@ namespace UACF.Core
                 {
                     UACFLogger.Log($"Request timeout ({timeoutMs}ms) - editor main thread may be blocked", LogLevel.Warning);
                     statusCode = 503;
-                    try
-                    {
-                        context.Response.StatusCode = 503;
-                        context.Response.ContentType = "application/json; charset=utf-8";
-                        var body = System.Text.Encoding.UTF8.GetBytes("{\"success\":false,\"error\":{\"code\":\"EDITOR_BUSY\",\"message\":\"Request timed out - editor main thread may be blocked (compilation, modal dialog, etc.)\"}}");
-                        context.Response.ContentLength64 = body.Length;
-                        context.Response.OutputStream.Write(body, 0, body.Length);
-                        context.Response.Close();
-                    }
-                    catch (Exception ex)
-                    {
-                        UACFLogger.Log($"Failed to send timeout response: {ex.Message}", LogLevel.Warning);
-                    }
+                    var errBody = JsonConvert.SerializeObject(ApiResponse.Fail(ErrorCode.SERVER_BUSY, "Request timed out - editor main thread may be blocked", null, 0));
+                    await TcpHttpServer.WriteResponseAsync(responseStream, 503, errBody);
                     return;
                 }
 
                 await routeTask;
-                statusCode = context.Response.StatusCode;
+                statusCode = ctx.StatusCode;
             }
             catch (Exception ex)
             {
-                UACFLogger.LogError(context.Request.HttpMethod, path, ex.Message, sw.ElapsedMilliseconds);
+                UACFLogger.LogError(method, path ?? "/", ex.Message, sw.ElapsedMilliseconds);
                 try
                 {
-                    context.Response.StatusCode = 500;
-                    context.Response.Close();
+                    var errBody = JsonConvert.SerializeObject(ApiResponse.Fail(ErrorCode.INTERNAL_ERROR, ex.Message, null, 0));
+                    await TcpHttpServer.WriteResponseAsync(responseStream, 500, errBody);
                 }
                 catch { }
             }
@@ -169,9 +118,9 @@ namespace UACF.Core
             {
                 sw.Stop();
                 if (statusCode >= 500)
-                    UACFLogger.LogError(context.Request.HttpMethod, path, $"Status {statusCode}", sw.ElapsedMilliseconds);
+                    UACFLogger.LogError(method, path ?? "/", $"Status {statusCode}", sw.ElapsedMilliseconds);
                 else
-                    UACFLogger.LogRequest(context.Request.HttpMethod, path, statusCode, sw.ElapsedMilliseconds);
+                    UACFLogger.LogRequest(method, path ?? "/", statusCode, sw.ElapsedMilliseconds);
             }
         }
     }
