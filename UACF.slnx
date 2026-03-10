@@ -1,0 +1,4 @@
+﻿<Solution>
+  <Project Path="com.uacf.editor.csproj" />
+  <Project Path="com.uacf.editor.tests.csproj" />
+</Solution>
