@@ -1,0 +1,44 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+  <Style src="DemoMenu.uss" />
+  <ui:VisualElement name="root" class="root theme-dark">
+    <ui:VisualElement name="top-section" class="top-section">
+    <ui:VisualElement name="header" class="header">
+      <ui:Label name="header-title" class="header-title" text="HASHKILL" />
+      <ui:Label name="header-sub" class="header-sub" text="rogue-like RTS" />
+    </ui:VisualElement>
+    <ui:VisualElement name="nav-panel" class="nav-panel">
+      <ui:Button name="btn-start" class="nav-button" text="Старт" />
+      <ui:Button name="btn-programs" class="nav-button" text="Программы" />
+      <ui:Button name="btn-settings" class="nav-button" text="Настройки" />
+      <ui:Button name="btn-quit" class="nav-button nav-button-last" text="Выйти" />
+    </ui:VisualElement>
+    <ui:VisualElement name="settings-panel" class="settings-panel screen-hidden">
+      <ui:Label name="settings-title" class="settings-title" text="Настройки" />
+      <ui:VisualElement name="row-theme" class="settings-row">
+        <ui:Label name="label-theme" class="settings-label" text="Тема" />
+        <ui:Toggle name="toggle-theme" class="theme-toggle" label="Светлая" />
+      </ui:VisualElement>
+      <ui:VisualElement name="row-graphics" class="settings-row">
+        <ui:Label name="label-graphics" class="settings-label" text="Качество" />
+        <ui:Slider name="slider-quality" class="slider" low-value="0" high-value="100" value="75" />
+      </ui:VisualElement>
+      <ui:VisualElement name="row-music" class="settings-row">
+        <ui:Label name="label-music" class="settings-label" text="Музыка" />
+        <ui:Slider name="slider-music" class="slider" low-value="0" high-value="100" value="70" />
+      </ui:VisualElement>
+      <ui:VisualElement name="row-sfx" class="settings-row settings-row-last">
+        <ui:Label name="label-sfx" class="settings-label" text="Звуки" />
+        <ui:Slider name="slider-sfx" class="slider" low-value="0" high-value="100" value="80" />
+      </ui:VisualElement>
+      <ui:VisualElement name="authors-block" class="authors-block">
+        <ui:Label name="authors-text" class="authors-text" text="HASHKILL — авторы игры" />
+      </ui:VisualElement>
+      <ui:Button name="btn-back" class="back-button" text="Назад" />
+    </ui:VisualElement>
+    </ui:VisualElement>
+    <ui:VisualElement name="status-bar" class="status-bar">
+      <ui:Label name="status-left" class="status-text" text="ПК • альбомный" />
+      <ui:Label name="status-right" class="status-text" text="ready" />
+    </ui:VisualElement>
+  </ui:VisualElement>
+</ui:UXML>
