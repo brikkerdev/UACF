@@ -1,0 +1,78 @@
+---
+description: UACF via curl, no runtime bootstrap for scene creation
+alwaysApply: true
+---
+
+# UACF Framework — обязательное использование
+
+**Не редактируйте YAML-файлы Unity вручную.** Используйте UACF HTTP API через curl. Сервер UACF доступен на localhost:7890 при открытом Unity Editor.
+
+## Endpoint
+
+```
+POST http://127.0.0.1:7890/uacf
+Content-Type: application/json
+```
+
+## Формат запроса
+
+```json
+{
+  "action": "имя.действия",
+  "params": { }
+}
+```
+
+## Базовые действия
+
+| Действие | Назначение |
+|----------|------------|
+| `api.list` | Список всех действий |
+| `api.help` | Справка по действию (params.action) |
+| `asset.file.write` | Запись файла |
+| `asset.file.read` | Чтение файла |
+| `asset.folder.create` | Создание папки |
+| `asset.refresh` | Обновление AssetDatabase |
+| `scene.hierarchy.get` | Иерархия сцены |
+| `scene.object.create` | Создание GameObject |
+| `scene.save` | Сохранение сцены |
+| `editor.compilationStatus` | Статус компиляции |
+
+## Примеры curl
+
+```bash
+# Список действий
+curl -X POST http://127.0.0.1:7890/uacf -H "Content-Type: application/json" -d '{"action":"api.list"}'
+
+# Запись файла
+curl -X POST http://127.0.0.1:7890/uacf -H "Content-Type: application/json" -d '{"action":"asset.file.write","params":{"path":"Assets/Scripts/NewScript.cs","content":"using UnityEngine;\n\npublic class NewScript : MonoBehaviour {}"}}'
+
+# Создание компонента UIX
+curl -X POST http://127.0.0.1:7890/uacf -H "Content-Type: application/json" -d '{"action":"uix.create_component","params":{"name":"MyButton","template_xml":"<component name=\"MyButton\"><template><button><text text=\"Click\" /></button></template></component>"}}'
+```
+
+## Сцена — только в редакторе
+
+**Не создавайте одноразовые скрипты или bootstrap для создания элементов на сцене.** Нельзя перекладывать ответственность за создание сцены на runtime.
+
+- Сцена должна быть **готова и доступна** в редакторе еще до запуска игры
+- Canvas, EventSystem, UI-иерархия — создаются в редакторе через UACF (`scene.object.create`, `scene.save`)
+- Для редактирования сцены есть все инструменты: UACF API, Unity Editor
+
+**Запрещено:**
+- Bootstrap/скрипты, которые создают Canvas, UI или объекты сцены при запуске
+- Runtime-создание иерархии, которая должна быть в сцене
+
+## Запрещено
+
+- Ручное редактирование `.unity`, `.meta`, `*.asset`, `*.prefab` (YAML)
+- Прямое создание/изменение сцен без UACF
+- Изменение ProjectSettings/*.asset вручную
+- Bootstrap/скрипты для runtime-создания сцены или UI
+
+## Разрешено
+
+- Редактирование `.cs`, `.xml`, `.uss`, `.json` (если не конфиг Unity)
+- Вызов curl для любых операций с проектом
+- Использование `asset.file.write` для записи исходников
+- Создание сцены через UACF (`scene.object.create`, `scene.save`)

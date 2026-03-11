@@ -211,6 +211,13 @@ curl -X POST http://localhost:6400/uacf \
 // → { "ok": false, "error": { "code": "COMPILATION_ERROR", "message": "The type 'GameObjec' could not be found..." } }
 ```
 
+### 2.2.1 Коды ошибок execute
+
+- `NOT_AVAILABLE` - Roslyn scripting не найден в текущем Unity Editor.
+- `COMPILATION_ERROR` - код не компилируется.
+- `INVOCATION_ERROR` - исключение во время выполнения.
+- `TIMEOUT` - превышен `timeout` (best-effort отмена через `CancellationToken`; бесконечный синхронный цикл, блокирующий main thread, нельзя форс-остановить).
+
 ### 2.3 Выполнение статического метода из проекта
 
 ```json
@@ -550,6 +557,15 @@ curl -X POST http://localhost:6400/uacf \
 ### 5.3 Создание ассетов
 
 ```json
+// PanelSettings (UI Toolkit)
+{ "action": "asset.create.panelSettings", "params": {
+  "path": "Assets/UI/DefaultPanelSettings.asset",
+  "properties": {
+    "targetTexture": null
+  },
+  "overwrite": true
+}}
+
 // Материал
 { "action": "asset.create.material", "params": {
   "path": "Assets/Materials/EnemyRed.mat",
@@ -939,6 +955,7 @@ asset.file.move                   Переместить файл
 asset.file.delete                 Удалить файл
 asset.folder.create               Создать папку
 asset.refresh                     Обновить базу ассетов
+asset.create.panelSettings        Создать PanelSettings
 asset.create.material             Создать материал
 asset.create.scriptableObject     Создать ScriptableObject
 asset.create.physicMaterial       Создать Physic Material

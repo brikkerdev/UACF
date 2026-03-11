@@ -24,6 +24,11 @@ namespace UACF.Handlers
             dispatcher.Register("asset.file.delete", HandleFileDelete);
             dispatcher.Register("asset.folder.create", HandleFolderCreate);
             dispatcher.Register("asset.refresh", HandleRefresh);
+            dispatcher.Register("asset.create.scriptableObject", HandleCreateScriptableObject);
+            dispatcher.Register("asset.create.panelSettings", HandleCreatePanelSettings);
+            dispatcher.Register("asset.create.material", HandleCreateMaterial);
+            dispatcher.Register("asset.create.physicMaterial", HandleCreatePhysicMaterial);
+            dispatcher.Register("asset.create.animationClip", HandleCreateAnimationClip);
         }
 
         private static Task<UacfResponse> HandleFind(JObject p)
@@ -209,6 +214,31 @@ namespace UACF.Handlers
                     AssetDatabase.Refresh();
                 return UacfResponse.Success(new { refreshed = true }, 0);
             });
+        }
+
+        private static Task<UacfResponse> HandleCreateScriptableObject(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() => AssetCreationService.CreateScriptableObject(p));
+        }
+
+        private static Task<UacfResponse> HandleCreatePanelSettings(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() => AssetCreationService.CreatePanelSettings(p));
+        }
+
+        private static Task<UacfResponse> HandleCreateMaterial(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() => AssetCreationService.CreateMaterial(p));
+        }
+
+        private static Task<UacfResponse> HandleCreatePhysicMaterial(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() => AssetCreationService.CreatePhysicMaterial(p));
+        }
+
+        private static Task<UacfResponse> HandleCreateAnimationClip(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() => AssetCreationService.CreateAnimationClip(p));
         }
     }
 }

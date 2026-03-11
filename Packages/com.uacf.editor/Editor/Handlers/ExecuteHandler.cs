@@ -20,14 +20,21 @@ namespace UACF.Handlers
             dispatcher.Register("execute.method", HandleMethod);
         }
 
-        private static Task<UacfResponse> HandleExecute(JObject p)
+        private static async Task<UacfResponse> HandleExecute(JObject p)
         {
             if (!UACFConfig.Instance.AllowExecute)
-                return Task.FromResult(UacfResponse.Fail("FORBIDDEN", "execute is disabled", "Set allowExecute: true in config.json", 0));
+                return UacfResponse.Fail("FORBIDDEN", "execute is disabled", "Set allowExecute: true in config.json", 0);
 
-            return Task.FromResult(UacfResponse.Fail("NOT_IMPLEMENTED",
-                "Arbitrary C# execution is not yet implemented",
-                "Use execute.method to call static methods, or execute.validate to check syntax", 0));
+            var code = p["code"]?.ToString();
+            if (string.IsNullOrWhiteSpace(code))
+                return UacfResponse.Fail("INVALID_REQUEST", "code is required", null, 0);
+
+            var returnExpression = p["return"]?.ToString();
+            var timeoutMs = p["timeout"]?.Value<int?>() ?? 0;
+            var usings = (p["usings"] as JArray)?.Select(x => x?.ToString()).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
+
+            return await MainThreadDispatcher.Enqueue(() =>
+                ExecuteScriptService.Instance.Execute(code, returnExpression, usings, timeoutMs));
         }
 
         private static Task<UacfResponse> HandleValidate(JObject p)

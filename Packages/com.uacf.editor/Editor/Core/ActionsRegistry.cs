@@ -260,6 +260,49 @@ namespace UACF.Core
             Add("asset.refresh", "Refresh AssetDatabase",
                 new ParamDef[] { new ParamDef("path", "string", false, "Specific path to refresh") },
                 new { action = "asset.refresh" });
+
+            Add("asset.create.scriptableObject", "Create ScriptableObject asset",
+                new ParamDef[] {
+                    new ParamDef("path", "string", true, "Asset path under Assets/"),
+                    new ParamDef("type", "string", true, "ScriptableObject type name"),
+                    new ParamDef("properties", "object", false, "Initial fields/properties"),
+                    new ParamDef("overwrite", "bool", false, "Overwrite existing asset")
+                },
+                new { action = "asset.create.scriptableObject", @params = new { path = "Assets/Data/EnemyConfig.asset", type = "EnemyConfig", overwrite = true } });
+
+            Add("asset.create.panelSettings", "Create UI Toolkit PanelSettings asset",
+                new ParamDef[] {
+                    new ParamDef("path", "string", true, "Asset path under Assets/"),
+                    new ParamDef("properties", "object", false, "Initial PanelSettings values"),
+                    new ParamDef("overwrite", "bool", false, "Overwrite existing asset")
+                },
+                new { action = "asset.create.panelSettings", @params = new { path = "Assets/UI/DefaultPanelSettings.asset", overwrite = true } });
+
+            Add("asset.create.material", "Create material asset",
+                new ParamDef[] {
+                    new ParamDef("path", "string", true, "Material asset path under Assets/"),
+                    new ParamDef("shader", "string", false, "Shader name (default Standard)"),
+                    new ParamDef("properties", "object", false, "Material properties"),
+                    new ParamDef("overwrite", "bool", false, "Overwrite existing asset")
+                },
+                new { action = "asset.create.material", @params = new { path = "Assets/Materials/EnemyRed.mat", shader = "Standard", overwrite = true } });
+
+            Add("asset.create.physicMaterial", "Create PhysicMaterial asset",
+                new ParamDef[] {
+                    new ParamDef("path", "string", true, "PhysicMaterial path under Assets/"),
+                    new ParamDef("properties", "object", false, "Initial PhysicMaterial values"),
+                    new ParamDef("overwrite", "bool", false, "Overwrite existing asset")
+                },
+                new { action = "asset.create.physicMaterial", @params = new { path = "Assets/Physics/Bouncy.physicMaterial", overwrite = true } });
+
+            Add("asset.create.animationClip", "Create AnimationClip asset",
+                new ParamDef[] {
+                    new ParamDef("path", "string", true, "AnimationClip path under Assets/"),
+                    new ParamDef("curves", "array", false, "Animation curve definitions"),
+                    new ParamDef("wrapMode", "string", false, "Once|Loop|PingPong|ClampForever"),
+                    new ParamDef("overwrite", "bool", false, "Overwrite existing asset")
+                },
+                new { action = "asset.create.animationClip", @params = new { path = "Assets/Animations/Spin.anim", wrapMode = "Loop", overwrite = true } });
         }
 
         public static void RegisterEditor()
