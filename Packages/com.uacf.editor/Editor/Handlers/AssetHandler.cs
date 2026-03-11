@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -117,18 +118,24 @@ namespace UACF.Handlers
             return new { path, children };
         }
 
-        private static Task<UacfResponse> HandleFileWrite(JObject p)
+        private static async Task<UacfResponse> HandleFileWrite(JObject p)
         {
-            return MainThreadDispatcher.Enqueue(() =>
+            var path = p["path"]?.ToString();
+            var content = p["content"]?.ToString() ?? "";
+            if (string.IsNullOrEmpty(path))
+                return UacfResponse.Fail("INVALID_REQUEST", "path is required", null, 0);
+
+            if (!path.StartsWith("Assets/") && !path.StartsWith("Packages/"))
+                return UacfResponse.Fail("INVALID_REQUEST", "path must be under Assets/ or Packages/", null, 0);
+
+            var compileAffecting = IsCompileAffectingPath(path);
+            // By default, do not trigger compile on every .cs/.asmdef write.
+            // Use asset.refresh once after a batch of edits.
+            var refresh = p["refresh"]?.Value<bool?>() ?? !compileAffecting;
+            var waitForCompilation = p["waitForCompilation"]?.Value<bool?>() ?? false;
+
+            await MainThreadDispatcher.Enqueue(() =>
             {
-                var path = p["path"]?.ToString();
-                var content = p["content"]?.ToString() ?? "";
-                if (string.IsNullOrEmpty(path))
-                    return UacfResponse.Fail("INVALID_REQUEST", "path is required", null, 0);
-
-                if (!path.StartsWith("Assets/") && !path.StartsWith("Packages/"))
-                    return UacfResponse.Fail("INVALID_REQUEST", "path must be under Assets/ or Packages/", null, 0);
-
                 var projectRoot = Path.GetDirectoryName(Application.dataPath);
                 var fullPath = Path.Combine(projectRoot, path);
                 var dir = Path.GetDirectoryName(fullPath);
@@ -136,9 +143,42 @@ namespace UACF.Handlers
                     Directory.CreateDirectory(dir);
 
                 File.WriteAllText(fullPath, content);
-                AssetDatabase.Refresh();
-                return UacfResponse.Success(new { written = true, path }, 0);
+                if (refresh)
+                    AssetDatabase.Refresh();
             });
+
+            if (!waitForCompilation)
+                return UacfResponse.Success(new
+                {
+                    written = true,
+                    path,
+                    refreshed = refresh,
+                    waitedForCompilation = false
+                }, 0);
+
+            var timeout = p["compileTimeoutSeconds"]?.Value<int?>() ?? UACF.Config.UACFSettings.instance.CompileTimeoutSeconds;
+            try
+            {
+                if (!refresh)
+                {
+                    await MainThreadDispatcher.Enqueue(() => AssetDatabase.Refresh());
+                    refresh = true;
+                }
+
+                var compile = await CompilationService.Instance.WaitForCompilationToFinishAsync(timeout);
+                return UacfResponse.Success(new
+                {
+                    written = true,
+                    path,
+                    refreshed = refresh,
+                    waitedForCompilation = true,
+                    compilation = BuildCompilationPayload(compile)
+                }, 0);
+            }
+            catch (TimeoutException ex)
+            {
+                return UacfResponse.Fail("TIMEOUT", ex.Message, "Compilation is still running. Retry with a higher compileTimeoutSeconds.", 0);
+            }
         }
 
         private static Task<UacfResponse> HandleFileRead(JObject p)
@@ -203,17 +243,33 @@ namespace UACF.Handlers
             });
         }
 
-        private static Task<UacfResponse> HandleRefresh(JObject p)
+        private static async Task<UacfResponse> HandleRefresh(JObject p)
         {
-            return MainThreadDispatcher.Enqueue(() =>
+            var waitForCompilation = p["waitForCompilation"]?.Value<bool?>() ?? true;
+            var timeout = p["compileTimeoutSeconds"]?.Value<int?>() ?? UACF.Config.UACFSettings.instance.CompileTimeoutSeconds;
+
+            await MainThreadDispatcher.Enqueue(() =>
             {
-                var path = p["path"]?.ToString();
-                if (!string.IsNullOrEmpty(path))
-                    AssetDatabase.Refresh();
-                else
-                    AssetDatabase.Refresh();
-                return UacfResponse.Success(new { refreshed = true }, 0);
+                AssetDatabase.Refresh();
             });
+
+            if (!waitForCompilation)
+                return UacfResponse.Success(new { refreshed = true, waitedForCompilation = false }, 0);
+
+            try
+            {
+                var compile = await CompilationService.Instance.WaitForCompilationToFinishAsync(timeout);
+                return UacfResponse.Success(new
+                {
+                    refreshed = true,
+                    waitedForCompilation = true,
+                    compilation = BuildCompilationPayload(compile)
+                }, 0);
+            }
+            catch (TimeoutException ex)
+            {
+                return UacfResponse.Fail("TIMEOUT", ex.Message, "Compilation is still running. Retry with a higher compileTimeoutSeconds.", 0);
+            }
         }
 
         private static Task<UacfResponse> HandleCreateScriptableObject(JObject p)
@@ -239,6 +295,51 @@ namespace UACF.Handlers
         private static Task<UacfResponse> HandleCreateAnimationClip(JObject p)
         {
             return MainThreadDispatcher.Enqueue(() => AssetCreationService.CreateAnimationClip(p));
+        }
+
+        private static bool IsCompileAffectingPath(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            switch (ext)
+            {
+                case ".cs":
+                case ".asmdef":
+                case ".asmref":
+                case ".rsp":
+                case ".dll":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static object BuildCompilationPayload(CompileResult result)
+        {
+            return new
+            {
+                hasErrors = result.HasErrors,
+                errorCount = result.ErrorCount,
+                warningCount = result.WarningCount,
+                durationMs = result.DurationMs,
+                errors = (result.Errors ?? new CompileError[0]).Select(e => new
+                {
+                    file = e.File,
+                    line = e.Line,
+                    column = e.Column,
+                    message = e.Message,
+                    severity = e.Severity
+                }).ToArray(),
+                warnings = (result.Warnings ?? new CompileError[0]).Select(w => new
+                {
+                    file = w.File,
+                    line = w.Line,
+                    column = w.Column,
+                    message = w.Message,
+                    severity = w.Severity
+                }).ToArray()
+            };
         }
     }
 }

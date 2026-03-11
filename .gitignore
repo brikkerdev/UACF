@@ -75,3 +75,6 @@ InitTestScene*.unity*
 # OS
 .DS_Store
 Thumbs.db
+
+# Local AI prompt docs
+.prompts/

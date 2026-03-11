@@ -1,0 +1,22 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+  <Style src="MainMenu.uss" />
+  <ui:VisualElement name="root" class="root">
+    <ui:VisualElement name="header" class="header">
+      <ui:Label name="header-title" class="header-title" text="&gt;_ SYSTEM" />
+      <ui:Label name="header-sub" class="header-sub" text="main_menu.v1" />
+    </ui:VisualElement>
+    <ui:VisualElement name="ascii-block" class="ascii-block">
+      <ui:Label name="ascii-art" class="ascii-art" text="  ___  __  __   _   _ ___ _   _ &#10; / _ \|  \/  | / \ | \_ _| \ | |&#10;| | | | |\/| |/ _ \| || ||  \| |&#10;| |_| | |  | / ___ \| || || |\  |&#10; \___/|_|  |_/_/   \_\___|_| \_|&#10;" />
+    </ui:VisualElement>
+    <ui:VisualElement name="nav-panel" class="nav-panel">
+      <ui:Button name="btn-new-game" class="nav-button" text="[ NEW GAME ]" />
+      <ui:Button name="btn-load" class="nav-button" text="[ LOAD ]" />
+      <ui:Button name="btn-settings" class="nav-button" text="[ SETTINGS ]" />
+      <ui:Button name="btn-quit" class="nav-button" text="[ QUIT ]" />
+    </ui:VisualElement>
+    <ui:VisualElement name="status-bar" class="status-bar">
+      <ui:Label name="status-left" class="status-text" text="~/.uacf/terminal" />
+      <ui:Label name="status-right" class="status-text" text="ready" />
+    </ui:VisualElement>
+  </ui:VisualElement>
+</ui:UXML>

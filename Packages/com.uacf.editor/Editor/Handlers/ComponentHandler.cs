@@ -261,7 +261,7 @@ namespace UACF.Handlers
                 if (string.IsNullOrEmpty(component))
                     return UacfResponse.Fail("INVALID_REQUEST", "component is required", null, 0);
 
-                var props = p["properties"]?.ToObject<Dictionary<string, object>>();
+                var props = p["properties"] as JObject;
                 if (props == null)
                     return UacfResponse.Fail("INVALID_REQUEST", "properties is required", null, 0);
 
@@ -269,7 +269,7 @@ namespace UACF.Handlers
                 if (comp == null)
                     return UacfResponse.Fail("COMPONENT_NOT_FOUND", "Component not found", null, 0);
 
-                ComponentService.SetFields(comp, props);
+                ComponentService.SetSerializedFields(comp, props);
                 return UacfResponse.Success(new { updated = true }, 0);
             });
         }

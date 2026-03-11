@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using UnityEditor;
 using UnityEditor.Compilation;
+using UACF.Core;
 using UACF.Models;
 
 namespace UACF.Services
@@ -123,6 +124,28 @@ namespace UACF.Services
                 Warnings = _lastWarnings.ToArray(),
                 DurationMs = 0
             };
+        }
+
+        public async Task<CompileResult> WaitForCompilationToFinishAsync(int timeoutSeconds = 120, int pollMs = 100)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var timeoutAt = DateTime.UtcNow.AddSeconds(timeoutSeconds <= 0 ? 120 : timeoutSeconds);
+
+            while (true)
+            {
+                var isCompiling = await MainThreadDispatcher.Enqueue(() => EditorApplication.isCompiling);
+                if (!isCompiling)
+                {
+                    var result = GetLastResult();
+                    result.DurationMs = sw.ElapsedMilliseconds;
+                    return result;
+                }
+
+                if (DateTime.UtcNow >= timeoutAt)
+                    throw new TimeoutException($"Compilation did not finish within {timeoutSeconds} seconds.");
+
+                await Task.Delay(pollMs);
+            }
         }
     }
 

@@ -234,9 +234,12 @@ namespace UACF.Core
             Add("asset.file.write", "Write file",
                 new ParamDef[] {
                     new ParamDef("path", "string", true, "File path"),
-                    new ParamDef("content", "string", true, "File content")
+                    new ParamDef("content", "string", true, "File content"),
+                    new ParamDef("refresh", "bool", false, "Refresh AssetDatabase after write (default: false for compile-affecting files)"),
+                    new ParamDef("waitForCompilation", "bool", false, "Wait for compilation to finish after write"),
+                    new ParamDef("compileTimeoutSeconds", "int", false, "Timeout for code compilation wait")
                 },
-                new { action = "asset.file.write", @params = new { path = "Assets/Scripts/Test.cs", content = "// code" } });
+                new { action = "asset.file.write", @params = new { path = "Assets/Scripts/Test.cs", content = "// code", refresh = false, waitForCompilation = false, compileTimeoutSeconds = 120 } });
 
             Add("asset.file.read", "Read file",
                 new ParamDef[] { new ParamDef("path", "string", true, "File path") },
@@ -258,8 +261,12 @@ namespace UACF.Core
                 new { action = "asset.folder.create", @params = new { path = "Assets/Prefabs/Enemies" } });
 
             Add("asset.refresh", "Refresh AssetDatabase",
-                new ParamDef[] { new ParamDef("path", "string", false, "Specific path to refresh") },
-                new { action = "asset.refresh" });
+                new ParamDef[] {
+                    new ParamDef("path", "string", false, "Specific path to refresh"),
+                    new ParamDef("waitForCompilation", "bool", false, "Wait until compilation is finished"),
+                    new ParamDef("compileTimeoutSeconds", "int", false, "Timeout for compilation wait")
+                },
+                new { action = "asset.refresh", @params = new { waitForCompilation = true, compileTimeoutSeconds = 120 } });
 
             Add("asset.create.scriptableObject", "Create ScriptableObject asset",
                 new ParamDef[] {
