@@ -80,7 +80,7 @@ namespace UACF.Handlers
         {
             return @"You have access to Unity Editor through UACF (Unity Autonomous Control Framework).
 
-All requests: POST http://localhost:6400/uacf with JSON body:
+All requests: POST http://localhost:7890/uacf with JSON body:
 { ""action"": ""action.name"", ""params"": { ... } }
 
 Response format: { ""ok"": true|false, ""data"": ..., ""error"": {...}, ""duration"": seconds }

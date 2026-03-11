@@ -23,8 +23,8 @@ Add to your project's `Packages/manifest.json`:
 
 ## Quick Start
 
-1. Open Unity Editor - the UACF server starts automatically on port 6400
-2. List actions: `curl -X POST http://localhost:6400/uacf -H "Content-Type: application/json" -d '{"action":"api.list"}'`
+1. Open Unity Editor - the UACF server starts automatically on port 7890
+2. List actions: `curl -X POST http://localhost:7890/uacf -H "Content-Type: application/json" -d '{"action":"api.list"}'`
 3. Configure: `ProjectSettings/UACF/config.json` or Edit > Project Settings > UACF
 
 ## API Format
@@ -42,21 +42,21 @@ All requests: **POST** to `/uacf` with JSON:
 
 ### List all actions
 ```bash
-curl -X POST http://localhost:6400/uacf \
+curl -X POST http://localhost:7890/uacf \
   -H "Content-Type: application/json" \
   -d '{"action":"api.list"}'
 ```
 
 ### Get scene hierarchy
 ```bash
-curl -X POST http://localhost:6400/uacf \
+curl -X POST http://localhost:7890/uacf \
   -H "Content-Type: application/json" \
   -d '{"action":"scene.hierarchy.get","params":{"depth":2,"components":true}}'
 ```
 
 ### Create GameObject with components
 ```bash
-curl -X POST http://localhost:6400/uacf \
+curl -X POST http://localhost:7890/uacf \
   -H "Content-Type: application/json" \
   -d '{
     "action": "scene.object.create",
@@ -73,7 +73,7 @@ curl -X POST http://localhost:6400/uacf \
 
 ### Write file
 ```bash
-curl -X POST http://localhost:6400/uacf \
+curl -X POST http://localhost:7890/uacf \
   -H "Content-Type: application/json" \
   -d '{
     "action": "asset.file.write",
@@ -86,14 +86,14 @@ curl -X POST http://localhost:6400/uacf \
 
 ### Save scene
 ```bash
-curl -X POST http://localhost:6400/uacf \
+curl -X POST http://localhost:7890/uacf \
   -H "Content-Type: application/json" \
   -d '{"action":"scene.save"}'
 ```
 
 ### Enter Play Mode
 ```bash
-curl -X POST http://localhost:6400/uacf \
+curl -X POST http://localhost:7890/uacf \
   -H "Content-Type: application/json" \
   -d '{"action":"editor.play"}'
 ```
@@ -125,7 +125,7 @@ curl -X POST http://localhost:6400/uacf \
 
 ```json
 {
-  "port": 6400,
+  "port": 7890,
   "host": "127.0.0.1",
   "token": "auto-generated",
   "allowExecute": true,

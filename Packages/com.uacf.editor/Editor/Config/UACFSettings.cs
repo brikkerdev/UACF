@@ -15,7 +15,7 @@ namespace UACF.Config
 
     public class UACFSettings : ScriptableSingleton<UACFSettings>
     {
-        [SerializeField] private int _port = 6400;
+        [SerializeField] private int _port = 7890;
         [SerializeField] private bool _autoStart = true;
         [SerializeField] private bool _logRequests = true;
         [SerializeField] private bool _logResponses = false;

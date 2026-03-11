@@ -1,5 +1,5 @@
 {
-  "port": 6400,
+  "port": 7890,
   "host": "127.0.0.1",
   "token": "f7ede54528ccdc088843382f",
   "allowExecute": true,
