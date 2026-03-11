@@ -1,0 +1,386 @@
+/* NEURAL_IDE — future IDE concept (CORTEX-inspired) */
+
+.root {
+  flex-grow: 1;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  background-color: #030303;
+  -unity-font-definition: url("/Assets/Fonts/JetBrainsMono.ttf");
+  font-size: 11px;
+}
+
+/* Header */
+.header {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 16px;
+  border-bottom-width: 1px;
+  border-bottom-color: #1a1a1a;
+}
+
+.header-group {
+  flex-direction: row;
+}
+
+.header-item {
+  flex-direction: row;
+  margin-right: 24px;
+}
+
+.header-label-dim {
+  color: #444444;
+  margin-right: 8px;
+}
+
+.header-label-high {
+  color: #ffffff;
+  -unity-font-style: normal;
+}
+
+.header-blink {
+  color: #ffffff;
+}
+
+/* Main row */
+.main-row {
+  flex-grow: 1;
+  flex-direction: row;
+  min-height: 0;
+}
+
+/* Activity bar */
+.activity-bar {
+  flex-direction: column;
+  width: 40px;
+  min-width: 40px;
+  background-color: #030303;
+  border-right-width: 1px;
+  border-right-color: #1a1a1a;
+  padding: 8px 0;
+}
+
+.activity-btn {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  background-color: transparent;
+  color: #444444;
+  border-width: 0;
+  font-size: 14px;
+}
+
+.activity-btn:hover {
+  color: #b0b0b0;
+}
+
+.activity-btn-active {
+  color: #ffffff;
+  border-left-width: 2px;
+  border-left-color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+/* Matrix panel (file tree) */
+.matrix-panel {
+  flex-direction: column;
+  width: 280px;
+  min-width: 200px;
+  max-width: 360px;
+  background-color: #030303;
+  border-right-width: 1px;
+  border-right-color: #1a1a1a;
+}
+
+.matrix-header {
+  flex-direction: row;
+  height: 24px;
+  min-height: 24px;
+  align-items: center;
+  border-bottom-width: 1px;
+  border-bottom-color: #1a1a1a;
+}
+
+.matrix-col-idx {
+  width: 40px;
+  color: #444444;
+  -unity-text-align: middle-center;
+}
+
+.matrix-col-path {
+  flex-grow: 1;
+  padding-left: 12px;
+  color: #444444;
+}
+
+.matrix-col-st {
+  width: 40px;
+  color: #444444;
+  -unity-text-align: middle-center;
+}
+
+.matrix-grid-wrapper {
+  flex-grow: 1;
+  flex-direction: column;
+  min-height: 0;
+  position: relative;
+}
+
+.file-tree {
+  flex-grow: 1;
+}
+
+.scanner-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  background-color: rgba(255, 255, 255, 0.03);
+  border-top-width: 1px;
+  border-top-color: rgba(255, 255, 255, 0.1);
+  border-bottom-width: 1px;
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+}
+
+.wave-selector {
+  flex-direction: row;
+}
+
+.wave-opt {
+  width: 24px;
+  height: 16px;
+  padding: 0;
+  margin-right: 8px;
+  background-color: transparent;
+  color: #444444;
+  border-width: 0;
+  font-size: 10px;
+}
+
+.wave-opt:hover {
+  color: #b0b0b0;
+}
+
+.wave-opt-active {
+  color: #ffffff;
+  opacity: 1;
+}
+
+.graph-canvas {
+  flex-grow: 1;
+  min-height: 60px;
+}
+
+.matrix-row {
+  flex-direction: row;
+  height: 24px;
+  min-height: 24px;
+  align-items: center;
+  border-bottom-width: 1px;
+  border-bottom-color: #1a1a1a;
+}
+
+.matrix-row:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.row-idx {
+  width: 40px;
+  color: #444444;
+  -unity-text-align: middle-center;
+  border-right-width: 1px;
+  border-right-color: #1a1a1a;
+}
+
+.row-data {
+  flex-grow: 1;
+  padding-left: 12px;
+  color: #b0b0b0;
+}
+
+.row-meta {
+  width: 40px;
+  color: #444444;
+  -unity-text-align: middle-center;
+  border-left-width: 1px;
+  border-left-color: #1a1a1a;
+}
+
+/* Editor area */
+.editor-area {
+  flex-grow: 1;
+  flex-direction: column;
+  min-width: 0;
+  background-color: #050505;
+  border-right-width: 1px;
+  border-right-color: #1a1a1a;
+}
+
+.editor-tabs {
+  flex-direction: row;
+  min-height: 24px;
+  border-bottom-width: 1px;
+  border-bottom-color: #1a1a1a;
+}
+
+.editor-tab {
+  padding: 4px 16px;
+  background-color: transparent;
+  color: #444444;
+  border-width: 0;
+  border-right-width: 1px;
+  border-right-color: #1a1a1a;
+  font-size: 11px;
+}
+
+.editor-tab:hover {
+  color: #b0b0b0;
+}
+
+.editor-tab-active {
+  color: #ffffff;
+  background-color: #050505;
+}
+
+.editor-content {
+  flex-grow: 1;
+  padding: 16px;
+}
+
+.editor-line {
+  color: #b0b0b0;
+  padding: 2px 0;
+  white-space: nowrap;
+}
+
+.editor-line-active {
+  color: #ffffff;
+}
+
+/* Control panel (right) */
+.control-panel {
+  flex-direction: column;
+  width: 280px;
+  min-width: 220px;
+  max-width: 360px;
+  background-color: #030303;
+}
+
+.section-label {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom-width: 1px;
+  border-bottom-color: #1a1a1a;
+}
+
+.section-title {
+  color: #ffffff;
+  font-size: 10px;
+}
+
+.param-grid {
+  flex-direction: row;
+  flex-wrap: wrap;
+}
+
+.param-cell {
+  flex-grow: 1;
+  flex-basis: 50%;
+  padding: 12px 16px;
+  border-bottom-width: 1px;
+  border-bottom-color: #1a1a1a;
+  border-right-width: 1px;
+  border-right-color: #1a1a1a;
+  min-width: 0;
+}
+
+.param-header {
+  flex-direction: row;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.param-label {
+  color: #444444;
+  font-size: 10px;
+}
+
+.param-val {
+  color: #ffffff;
+  font-size: 11px;
+}
+
+.param-slider {
+  flex-grow: 1;
+  height: 16px;
+  min-height: 16px;
+}
+
+.param-slider .unity-base-slider__tracker {
+  background-color: #444444;
+  border-radius: 0;
+  border-width: 0;
+}
+
+.param-slider .unity-base-slider__dragger {
+  background-color: #000000;
+  border-width: 1px;
+  border-color: #ffffff;
+  border-radius: 50%;
+}
+
+.param-slider .unity-base-slider__dragger:hover {
+  border-color: #ffffff;
+}
+
+.graph-area {
+  flex-grow: 1;
+  flex-direction: row;
+  flex-wrap: wrap;
+  padding: 16px;
+}
+
+.graph-box {
+  flex-grow: 1;
+  flex-basis: 45%;
+  flex-direction: column;
+  min-height: 80px;
+  background-color: #050505;
+  border-width: 1px;
+  border-color: #1a1a1a;
+  border-radius: 0;
+  padding: 8px;
+}
+
+.graph-label {
+  color: #444444;
+  font-size: 10px;
+}
+
+/* Footer */
+.footer {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  border-top-width: 1px;
+  border-top-color: #1a1a1a;
+}
+
+.footer-group {
+  flex-direction: row;
+}
+
+.footer-item {
+  color: #444444;
+  margin-right: 16px;
+  font-size: 10px;
+}

@@ -1,0 +1,142 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+  <Style src="VSCodeDemo.uss" />
+  <ui:VisualElement name="root" class="root">
+    <ui:VisualElement name="header" class="header">
+      <ui:VisualElement name="header-group-left" class="header-group">
+        <ui:VisualElement name="header-item-sys" class="header-item">
+          <ui:Label name="header-sys-label" class="header-label-dim" text="SYS" />
+          <ui:Label name="header-sys-val" class="header-label-high" text="NEURAL_IDE" />
+        </ui:VisualElement>
+        <ui:VisualElement name="header-item-status" class="header-item">
+          <ui:Label name="header-status-indicator" class="header-label-dim header-blink" text="&#9654;" />
+          <ui:Label name="header-status-val" class="header-label-high" text="RUNNING" />
+        </ui:VisualElement>
+      </ui:VisualElement>
+      <ui:VisualElement name="header-group-right" class="header-group">
+        <ui:VisualElement name="header-item-cpu" class="header-item">
+          <ui:Label name="header-cpu-label" class="header-label-dim" text="CPU" />
+          <ui:Label name="header-cpu-val" class="header-label-high" text="12%" />
+        </ui:VisualElement>
+        <ui:VisualElement name="header-item-mem" class="header-item">
+          <ui:Label name="header-mem-label" class="header-label-dim" text="MEM" />
+          <ui:Label name="header-mem-val" class="header-label-high" text="4.2GB" />
+        </ui:VisualElement>
+      </ui:VisualElement>
+    </ui:VisualElement>
+    <ui:VisualElement name="main-row" class="main-row">
+      <ui:VisualElement name="activity-bar" class="activity-bar">
+        <ui:Button name="btn-explorer" class="activity-btn activity-btn-active" text="&#9632;" />
+        <ui:Button name="btn-search" class="activity-btn" text="&#9633;" />
+        <ui:Button name="btn-git" class="activity-btn" text="&#9650;" />
+        <ui:Button name="btn-extensions" class="activity-btn" text="&#9646;" />
+      </ui:VisualElement>
+      <ui:VisualElement name="matrix-panel" class="matrix-panel">
+        <ui:VisualElement name="matrix-header" class="matrix-header">
+          <ui:Label name="matrix-col-idx" class="matrix-col-idx" text="IDX" />
+          <ui:Label name="matrix-col-path" class="matrix-col-path" text="PATH_HASH" />
+          <ui:Label name="matrix-col-st" class="matrix-col-st" text="ST" />
+        </ui:VisualElement>
+        <ui:VisualElement name="matrix-grid-wrapper" class="matrix-grid-wrapper">
+        <ui:ScrollView name="file-tree" class="file-tree">
+          <ui:VisualElement name="tree-row-0" class="matrix-row"><ui:Label name="tree-idx-0" class="row-idx" text="00" /><ui:Label name="tree-path-0" class="row-data" text="-- -- -- --" /><ui:Label name="tree-st-0" class="row-meta" text=":" /></ui:VisualElement>
+          <ui:VisualElement name="tree-row-1" class="matrix-row"><ui:Label name="tree-idx-1" class="row-idx" text="01" /><ui:Label name="tree-path-1" class="row-data" text="-- -- -- --" /><ui:Label name="tree-st-1" class="row-meta" text=":" /></ui:VisualElement>
+          <ui:VisualElement name="tree-row-2" class="matrix-row"><ui:Label name="tree-idx-2" class="row-idx" text="02" /><ui:Label name="tree-path-2" class="row-data" text="-- -- -- --" /><ui:Label name="tree-st-2" class="row-meta" text=":" /></ui:VisualElement>
+          <ui:VisualElement name="tree-row-3" class="matrix-row"><ui:Label name="tree-idx-3" class="row-idx" text="03" /><ui:Label name="tree-path-3" class="row-data" text="-- -- -- --" /><ui:Label name="tree-st-3" class="row-meta" text=":" /></ui:VisualElement>
+          <ui:VisualElement name="tree-row-4" class="matrix-row"><ui:Label name="tree-idx-4" class="row-idx" text="04" /><ui:Label name="tree-path-4" class="row-data" text="-- -- -- --" /><ui:Label name="tree-st-4" class="row-meta" text=":" /></ui:VisualElement>
+          <ui:VisualElement name="tree-row-5" class="matrix-row"><ui:Label name="tree-idx-5" class="row-idx" text="05" /><ui:Label name="tree-path-5" class="row-data" text="-- -- -- --" /><ui:Label name="tree-st-5" class="row-meta" text=":" /></ui:VisualElement>
+          <ui:VisualElement name="tree-row-6" class="matrix-row"><ui:Label name="tree-idx-6" class="row-idx" text="06" /><ui:Label name="tree-path-6" class="row-data" text="-- -- -- --" /><ui:Label name="tree-st-6" class="row-meta" text=":" /></ui:VisualElement>
+          <ui:VisualElement name="tree-row-7" class="matrix-row"><ui:Label name="tree-idx-7" class="row-idx" text="07" /><ui:Label name="tree-path-7" class="row-data" text="-- -- -- --" /><ui:Label name="tree-st-7" class="row-meta" text=":" /></ui:VisualElement>
+          <ui:VisualElement name="tree-row-8" class="matrix-row"><ui:Label name="tree-idx-8" class="row-idx" text="08" /><ui:Label name="tree-path-8" class="row-data" text="-- -- -- --" /><ui:Label name="tree-st-8" class="row-meta" text=":" /></ui:VisualElement>
+          <ui:VisualElement name="tree-row-9" class="matrix-row"><ui:Label name="tree-idx-9" class="row-idx" text="09" /><ui:Label name="tree-path-9" class="row-data" text="-- -- -- --" /><ui:Label name="tree-st-9" class="row-meta" text=":" /></ui:VisualElement>
+          <ui:VisualElement name="tree-row-10" class="matrix-row"><ui:Label name="tree-idx-10" class="row-idx" text="0A" /><ui:Label name="tree-path-10" class="row-data" text="-- -- -- --" /><ui:Label name="tree-st-10" class="row-meta" text=":" /></ui:VisualElement>
+          <ui:VisualElement name="tree-row-11" class="matrix-row"><ui:Label name="tree-idx-11" class="row-idx" text="0B" /><ui:Label name="tree-path-11" class="row-data" text="-- -- -- --" /><ui:Label name="tree-st-11" class="row-meta" text=":" /></ui:VisualElement>
+          <ui:VisualElement name="tree-row-12" class="matrix-row"><ui:Label name="tree-idx-12" class="row-idx" text="0C" /><ui:Label name="tree-path-12" class="row-data" text="-- -- -- --" /><ui:Label name="tree-st-12" class="row-meta" text=":" /></ui:VisualElement>
+          <ui:VisualElement name="tree-row-13" class="matrix-row"><ui:Label name="tree-idx-13" class="row-idx" text="0D" /><ui:Label name="tree-path-13" class="row-data" text="-- -- -- --" /><ui:Label name="tree-st-13" class="row-meta" text=":" /></ui:VisualElement>
+        </ui:ScrollView>
+        <ui:VisualElement name="scanner-bar" class="scanner-bar" />
+        </ui:VisualElement>
+      </ui:VisualElement>
+      <ui:VisualElement name="editor-area" class="editor-area">
+        <ui:VisualElement name="editor-tabs" class="editor-tabs">
+          <ui:Button name="tab-1" class="editor-tab editor-tab-active" text="DemoMenuController.cs" />
+          <ui:Button name="tab-2" class="editor-tab" text="VSCodeDemo.uxml" />
+          <ui:Button name="tab-3" class="editor-tab" text="README.md" />
+        </ui:VisualElement>
+        <ui:VisualElement name="editor-content" class="editor-content">
+          <ui:Label name="editor-line1" class="editor-line" text="1  using UnityEngine;" />
+          <ui:Label name="editor-line2" class="editor-line" text="2  using UnityEngine.UIElements;" />
+          <ui:Label name="editor-line3" class="editor-line" text="3  " />
+          <ui:Label name="editor-line4" class="editor-line" text="4  public class DemoMenuController : MonoBehaviour" />
+          <ui:Label name="editor-line5" class="editor-line" text="5  {" />
+          <ui:Label name="editor-line6" class="editor-line" text="6      const string ThemeDark = &quot;theme-dark&quot;;" />
+          <ui:Label name="editor-line7" class="editor-line" text="7      const string ThemeLight = &quot;theme-light&quot;;" />
+          <ui:Label name="editor-line8" class="editor-line" text="8      " />
+          <ui:Label name="editor-line9" class="editor-line" text="9      [SerializeField] UIDocument _uiDocument;" />
+          <ui:Label name="editor-line10" class="editor-line editor-line-active" text="10     // ..." />
+        </ui:VisualElement>
+      </ui:VisualElement>
+      <ui:VisualElement name="control-panel" class="control-panel">
+        <ui:VisualElement name="section-label" class="section-label">
+          <ui:Label name="section-title" class="section-title" text="HYPERPARAMETERS" />
+          <ui:VisualElement name="wave-selector" class="wave-selector">
+            <ui:Button name="wave-opt-1" class="wave-opt wave-opt-active" text="~" />
+            <ui:Button name="wave-opt-2" class="wave-opt" text="[]" />
+            <ui:Button name="wave-opt-3" class="wave-opt" text="/\" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="param-grid" class="param-grid">
+          <ui:VisualElement name="param-cell-1" class="param-cell">
+            <ui:VisualElement name="param-header-1" class="param-header">
+              <ui:Label name="param-label-1" class="param-label" text="L_RATE" />
+              <ui:Label name="param-val-1" class="param-val" text="0.045" />
+            </ui:VisualElement>
+            <ui:Slider name="slider-1" class="param-slider" low-value="0" high-value="100" value="45" />
+          </ui:VisualElement>
+          <ui:VisualElement name="param-cell-2" class="param-cell">
+            <ui:VisualElement name="param-header-2" class="param-header">
+              <ui:Label name="param-label-2" class="param-label" text="DECAY" />
+              <ui:Label name="param-val-2" class="param-val" text="0.92" />
+            </ui:VisualElement>
+            <ui:Slider name="slider-2" class="param-slider" low-value="0" high-value="100" value="92" />
+          </ui:VisualElement>
+          <ui:VisualElement name="param-cell-3" class="param-cell">
+            <ui:VisualElement name="param-header-3" class="param-header">
+              <ui:Label name="param-label-3" class="param-label" text="BATCH" />
+              <ui:Label name="param-val-3" class="param-val" text="64" />
+            </ui:VisualElement>
+            <ui:Slider name="slider-3" class="param-slider" low-value="0" high-value="100" value="38" />
+          </ui:VisualElement>
+          <ui:VisualElement name="param-cell-4" class="param-cell">
+            <ui:VisualElement name="param-header-4" class="param-header">
+              <ui:Label name="param-label-4" class="param-label" text="EPOCH" />
+              <ui:Label name="param-val-4" class="param-val" text="128" />
+            </ui:VisualElement>
+            <ui:Slider name="slider-4" class="param-slider" low-value="0" high-value="100" value="50" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="section-metrics" class="section-label">
+          <ui:Label name="metrics-title" class="section-title" text="PERFORMANCE" />
+          <ui:Label name="metrics-type" class="param-val" text="FLT.32" />
+        </ui:VisualElement>
+        <ui:VisualElement name="graph-area" class="graph-area">
+          <ui:VisualElement name="graph-box-1" class="graph-box">
+            <ui:Label name="graph-label-1" class="graph-label" text="LOSS_FUNC" />
+            <ui:VisualElement name="graph-canvas-1" class="graph-canvas" />
+          </ui:VisualElement>
+          <ui:VisualElement name="graph-box-2" class="graph-box">
+            <ui:Label name="graph-label-2" class="graph-label" text="ACCURACY" />
+            <ui:VisualElement name="graph-canvas-2" class="graph-canvas" />
+          </ui:VisualElement>
+        </ui:VisualElement>
+      </ui:VisualElement>
+    </ui:VisualElement>
+    <ui:VisualElement name="footer" class="footer">
+      <ui:Label name="footer-log" class="footer-item" text="LOG_OUT: OPTIMIZER CONVERGING" />
+      <ui:VisualElement name="footer-group-right" class="footer-group">
+        <ui:Label name="footer-ext" class="footer-item" text=".cs" />
+        <ui:Label name="footer-ext2" class="footer-item" text=".uxml" />
+        <ui:Label name="footer-ext3" class="footer-item" text=".uss" />
+      </ui:VisualElement>
+    </ui:VisualElement>
+  </ui:VisualElement>
+</ui:UXML>
