@@ -85,6 +85,16 @@ namespace UACF.Services
                                 ComponentService.SetFields(comp, op.Fields);
                         }
                     }
+                    else if (op.Action == "remove_component")
+                    {
+                        var target = string.IsNullOrEmpty(op.TargetPath) ? prefabRoot : FindInPrefab(prefabRoot, op.TargetPath) ?? prefabRoot;
+                        if (target != null)
+                        {
+                            var comp = ComponentService.GetComponent(target, op.Component, 0);
+                            if (comp != null && !(comp is Transform))
+                                ComponentService.RemoveComponent(comp);
+                        }
+                    }
                 }
 
                 PrefabUtility.SaveAsPrefabAsset(prefabRoot, prefabPath);

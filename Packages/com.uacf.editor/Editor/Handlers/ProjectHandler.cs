@@ -1,105 +1,128 @@
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Unity.Plastic.Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using Unity.Plastic.Newtonsoft.Json.Linq;
 using UACF.Core;
-using UACF.Services;
+using UACF.Models;
 
 namespace UACF.Handlers
 {
     public static class ProjectHandler
     {
-        public static void Register(RequestRouter router)
+        public static void Register(ActionDispatcher dispatcher)
         {
-            router.Register("GET", "/api/project/settings", HandleSettings);
-            router.Register("POST", "/api/project/add-tag", HandleAddTag);
-            router.Register("POST", "/api/project/set-layer", HandleSetLayer);
+            dispatcher.Register("project.info", HandleInfo);
+            dispatcher.Register("project.tags", HandleTags);
+            dispatcher.Register("project.layers", HandleLayers);
+            dispatcher.Register("project.settings.get", HandleSettingsGet);
+            dispatcher.Register("project.settings.set", HandleSettingsSet);
         }
 
-        private static async Task HandleSettings(RequestContext ctx)
+        private static Task<UacfResponse> HandleInfo(JObject p)
         {
-            var category = ctx.QueryParams.TryGetValue("category", out var c) ? c : null;
-
-            var data = await MainThreadDispatcher.Enqueue<object>(() =>
+            return MainThreadDispatcher.Enqueue(() =>
             {
-                if (category == "tags")
+                var packages = UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages()
+                    .Select(pkg => new { name = pkg.name, version = pkg.version })
+                    .ToArray();
+
+                return UacfResponse.Success(new
                 {
-                    var tags = UnityEditorInternal.InternalEditorUtility.tags;
-                    return new { tags = tags.ToList() };
+                    unityVersion = Application.unityVersion,
+                    projectName = System.IO.Path.GetFileNameWithoutExtension(Application.dataPath),
+                    projectPath = System.IO.Path.GetDirectoryName(Application.dataPath),
+                    renderPipeline = GetRenderPipeline(),
+                    targetPlatform = Application.platform.ToString(),
+                    packages
+                }, 0);
+            });
+        }
+
+        private static string GetRenderPipeline()
+        {
+            if (UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline != null)
+                return UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline.GetType().Name;
+            return "Built-in";
+        }
+
+        private static Task<UacfResponse> HandleTags(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() =>
+            {
+                var tags = UnityEditorInternal.InternalEditorUtility.tags;
+                return UacfResponse.Success(new { tags }, 0);
+            });
+        }
+
+        private static Task<UacfResponse> HandleLayers(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() =>
+            {
+                var layers = new System.Collections.Generic.Dictionary<string, int>();
+                for (int i = 0; i < 32; i++)
+                {
+                    var name = LayerMask.LayerToName(i);
+                    if (!string.IsNullOrEmpty(name))
+                        layers[name] = i;
                 }
-                if (category == "layers")
-                {
-                    var layers = new Dictionary<string, string>();
-                    for (int i = 0; i < 32; i++)
+                return UacfResponse.Success(new { layers }, 0);
+            });
+        }
+
+        private static Task<UacfResponse> HandleSettingsGet(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() =>
+            {
+                var category = p["category"]?.ToString();
+                if (string.IsNullOrEmpty(category))
+                    return UacfResponse.Fail("INVALID_REQUEST", "category is required", null, 0);
+
+                var settings = GetSettingsByCategory(category);
+                return UacfResponse.Success(new { category, properties = settings }, 0);
+            });
+        }
+
+        private static object GetSettingsByCategory(string category)
+        {
+            switch (category.ToLowerInvariant())
+            {
+                case "physics":
+                    return new
                     {
-                        var name = LayerMask.LayerToName(i);
-                        if (!string.IsNullOrEmpty(name))
-                            layers[i.ToString()] = name;
-                    }
-                    return new { layers = layers };
-                }
-                if (category == "sorting_layers")
-                {
-                    var layers = SortingLayer.layers.Select(s => s.name).ToArray();
-                    return new { sorting_layers = layers };
-                }
-                return new { tags = UnityEditorInternal.InternalEditorUtility.tags.ToList(), layers = new Dictionary<string, string>() };
-            });
-            ctx.RespondOk(data);
+                        gravity = new[] { Physics.gravity.x, Physics.gravity.y, Physics.gravity.z },
+                        defaultContactOffset = Physics.defaultContactOffset,
+                        bounceThreshold = Physics.bounceThreshold
+                    };
+                case "time":
+                    return new
+                    {
+                        fixedDeltaTime = Time.fixedDeltaTime,
+                        timeScale = Time.timeScale
+                    };
+                default:
+                    return new { message = $"Category '{category}' not implemented" };
+            }
         }
 
-        private static async Task HandleAddTag(RequestContext ctx)
+        private static Task<UacfResponse> HandleSettingsSet(JObject p)
         {
-            var body = await ctx.ReadBodyAsync<JObject>();
-            var tag = body?["tag"]?.ToString();
-            if (string.IsNullOrEmpty(tag))
+            return MainThreadDispatcher.Enqueue(() =>
             {
-                ResponseHelper.InvalidRequest(ctx, "tag is required");
-                return;
-            }
+                var category = p["category"]?.ToString();
+                var props = p["properties"] as JObject;
+                if (string.IsNullOrEmpty(category) || props == null)
+                    return UacfResponse.Fail("INVALID_REQUEST", "category and properties are required", null, 0);
 
-            var result = await MainThreadDispatcher.Enqueue<object>(() =>
-            {
-                var tags = UnityEditorInternal.InternalEditorUtility.tags.ToList();
-                if (tags.Contains(tag)) return new { added = false, message = "Tag already exists" };
-                SerializedObject tagManager = new SerializedObject(
-                    AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")[0]);
-                SerializedProperty tagsProp = tagManager.FindProperty("tags");
-                tagsProp.InsertArrayElementAtIndex(tagsProp.arraySize);
-                tagsProp.GetArrayElementAtIndex(tagsProp.arraySize - 1).stringValue = tag;
-                tagManager.ApplyModifiedProperties();
-                return new { added = true };
-            });
-            ctx.RespondOk(result);
-        }
-
-        private static async Task HandleSetLayer(RequestContext ctx)
-        {
-            var body = await ctx.ReadBodyAsync<JObject>();
-            var layerIndex = body?["layer_index"]?.Value<int>() ?? -1;
-            var name = body?["name"]?.ToString();
-            if (layerIndex < 0 || layerIndex > 31 || string.IsNullOrEmpty(name))
-            {
-                ResponseHelper.InvalidRequest(ctx, "layer_index (0-31) and name are required");
-                return;
-            }
-
-            var result = await MainThreadDispatcher.Enqueue<object>(() =>
-            {
-                SerializedObject tagManager = new SerializedObject(
-                    AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")[0]);
-                SerializedProperty layersProp = tagManager.FindProperty("layers");
-                if (layerIndex < layersProp.arraySize)
+                if (category.ToLowerInvariant() == "physics")
                 {
-                    layersProp.GetArrayElementAtIndex(layerIndex).stringValue = name;
-                    tagManager.ApplyModifiedProperties();
-                    return new { set = true };
+                    var gravity = props["gravity"] as JArray;
+                    if (gravity != null && gravity.Count >= 3)
+                        Physics.gravity = new Vector3(gravity[0].Value<float>(), gravity[1].Value<float>(), gravity[2].Value<float>());
                 }
-                return new { set = false };
+
+                return UacfResponse.Success(new { updated = true }, 0);
             });
-            ctx.RespondOk(result);
         }
     }
 }

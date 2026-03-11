@@ -1,4 +1,3 @@
-using System;
 using UnityEditor;
 using UnityEditor.Compilation;
 using UACF.Config;
@@ -11,6 +10,7 @@ namespace UACF.Core
     {
         private static UACFServer _server;
         private static RequestRouter _router;
+        private static ActionDispatcher _dispatcher;
         private const string PortKey = "UACF_Port";
 
         static UACFBootstrap()
@@ -25,33 +25,39 @@ namespace UACF.Core
         {
             if (_server != null) return;
 
-            _router = new RequestRouter();
-            RegisterAllRoutes(_router);
+            _dispatcher = new ActionDispatcher();
+            var dispatcher = _dispatcher;
+            ApiHandler.Register(dispatcher);
+            SceneHandler.Register(dispatcher);
+            GameObjectHandler.Register(dispatcher);
+            ComponentHandler.Register(dispatcher);
+            ExecuteHandler.Register(dispatcher);
+            AssetHandler.Register(dispatcher);
+            PrefabHandler.Register(dispatcher);
+            ConsoleHandler.Register(dispatcher);
+            EditorHandler.Register(dispatcher);
+            ProjectHandler.Register(dispatcher);
+            RuntimeHandler.Register(dispatcher);
+            TestHandler.Register(dispatcher);
+            BatchHandler.Register(dispatcher);
+
+            var uacfHandler = new UacfEndpointHandler(dispatcher);
+            _router = new RequestRouter(uacfHandler);
 
             _server = new UACFServer(_router);
 
             if (UACFSettings.instance.AutoStart)
             {
-                var port = SessionState.GetInt(PortKey, UACFSettings.instance.Port);
-                if (port == 0) port = UACFSettings.instance.Port;
+                var config = UACFConfig.Instance;
+                var port = SessionState.GetInt(PortKey, config.Port);
+                if (port == 0) port = config.Port;
                 if (_server.Start(port))
+                {
                     SessionState.SetInt(PortKey, _server.Port);
+                    if (!string.IsNullOrEmpty(config.Token))
+                        UACFLogger.Log($"UACF Auth token: {config.Token}", Config.LogLevel.Info);
+                }
             }
-        }
-
-        private static void RegisterAllRoutes(RequestRouter router)
-        {
-            StatusHandler.Register(router);
-            AssetsHandler.Register(router);
-            CompileHandler.Register(router);
-            FileHandler.Register(router);
-            SceneHandler.Register(router);
-            GameObjectHandler.Register(router);
-            ComponentHandler.Register(router);
-            PrefabHandler.Register(router);
-            ProjectHandler.Register(router);
-            EditorHandler.Register(router);
-            BatchHandler.Register(router);
         }
 
         private static void OnBeforeAssemblyReload()
@@ -63,6 +69,7 @@ namespace UACF.Core
         {
             _server = null;
             _router = null;
+            _dispatcher = null;
             EditorApplication.delayCall += Initialize;
         }
 
@@ -72,5 +79,6 @@ namespace UACF.Core
         }
 
         public static UACFServer GetServer() => _server;
+        public static ActionDispatcher GetDispatcher() => _dispatcher;
     }
 }

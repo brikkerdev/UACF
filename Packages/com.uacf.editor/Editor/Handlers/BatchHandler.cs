@@ -1,125 +1,86 @@
 using System.Collections.Generic;
-using System.Net.Http;
-using System.Text;
 using System.Threading.Tasks;
-using Unity.Plastic.Newtonsoft.Json;
+using UnityEditor;
 using Unity.Plastic.Newtonsoft.Json.Linq;
 using UACF.Config;
 using UACF.Core;
-using UACF.Handlers;
+using UACF.Models;
 
 namespace UACF.Handlers
 {
     public static class BatchHandler
     {
-        public static void Register(RequestRouter router)
+        public static void Register(ActionDispatcher dispatcher)
         {
-            router.Register("POST", "/api/batch/execute", HandleExecute);
+            dispatcher.Register("batch", HandleBatch);
         }
 
-        private static async Task HandleExecute(RequestContext ctx)
+        private static async Task<UacfResponse> HandleBatch(JObject p)
         {
-            if (!UACFSettings.instance.EnableBatchEndpoint)
-            {
-                ResponseHelper.InvalidRequest(ctx, "Batch endpoint is disabled");
-                return;
-            }
+                if (!UACFSettings.instance.EnableBatchEndpoint)
+                    return UacfResponse.Fail("FORBIDDEN", "Batch endpoint is disabled", null, 0);
 
-            var body = await ctx.ReadBodyAsync<JObject>();
-            if (body?["operations"] == null)
-            {
-                ResponseHelper.InvalidRequest(ctx, "operations array is required");
-                return;
-            }
+                var operations = p["operations"] as JArray;
+                if (operations == null)
+                    return UacfResponse.Fail("INVALID_REQUEST", "operations array is required", null, 0);
 
-            var ops = body["operations"] as JArray;
-            var stopOnError = body["stop_on_error"]?.Value<bool>() ?? true;
+                var undoGroup = p["undoGroup"]?.ToString();
+                var stopOnError = p["stopOnError"]?.Value<bool>() ?? true;
 
-            var server = UACFBootstrap.GetServer();
-            if (server == null || !server.IsRunning)
-            {
-                ResponseHelper.InternalError(ctx, "Server not running");
-                return;
-            }
+                var dispatcher = GetDispatcher();
+                if (dispatcher == null)
+                    return UacfResponse.Fail("INTERNAL_ERROR", "ActionDispatcher not available", null, 0);
 
-            var port = server.Port;
-            var baseUrl = $"http://127.0.0.1:{port}";
-            var results = new List<object>();
-            var httpClient = new HttpClient { Timeout = System.TimeSpan.FromSeconds(UACFSettings.instance.RequestTimeoutSeconds) };
-
-            foreach (var op in ops)
-            {
-                var jo = op as JObject;
-                if (jo == null) continue;
-
-                var id = jo["id"]?.ToString() ?? "op";
-                var endpoint = jo["endpoint"]?.ToString();
-                var opBody = jo["body"];
-
-                if (string.IsNullOrEmpty(endpoint))
+                int undoGroupId = 0;
+                if (!string.IsNullOrEmpty(undoGroup))
                 {
-                    results.Add(new { id, success = false, error = "endpoint required" });
-                    if (stopOnError) break;
-                    continue;
+                    Undo.SetCurrentGroupName(undoGroup);
+                    undoGroupId = Undo.GetCurrentGroup();
                 }
 
-                var parts = endpoint.Trim().Split(new[] { ' ' }, 2);
-                var method = parts.Length > 0 ? parts[0].ToUpperInvariant() : "POST";
-                var path = parts.Length > 1 ? parts[1].Trim() : "";
+                var results = new List<object>();
+                var allOk = true;
 
-                if (!path.StartsWith("/")) path = "/" + path;
-
-                try
+                foreach (var op in operations)
                 {
-                    var request = new HttpRequestMessage(new HttpMethod(method), baseUrl + path);
-                    if (opBody != null && (method == "POST" || method == "PUT"))
+                    var jo = op as JObject;
+                    if (jo == null) continue;
+
+                    var action = jo["action"]?.ToString();
+                    var @params = jo["params"] as JObject ?? new JObject();
+
+                    if (string.IsNullOrEmpty(action))
                     {
-                        request.Content = new StringContent(opBody.ToString(), Encoding.UTF8, "application/json");
+                        results.Add(new { ok = false, error = "action required" });
+                        if (stopOnError) { allOk = false; break; }
+                        continue;
                     }
 
-                    var response = await httpClient.SendAsync(request);
-                    var responseBody = await response.Content.ReadAsStringAsync();
-
-                    object data = null;
-                    try
-                    {
-                        var json = JObject.Parse(responseBody);
-                        data = json["data"];
-                    }
-                    catch { }
-
+                    var response = await dispatcher.DispatchAsync(action, @params);
                     results.Add(new
                     {
-                        id,
-                        success = response.IsSuccessStatusCode,
-                        status = (int)response.StatusCode,
-                        data = data
+                        ok = response.Ok,
+                        data = response.Data,
+                        error = response.Error != null ? new { response.Error.Code, response.Error.Message } : null
                     });
 
-                    if (stopOnError && !response.IsSuccessStatusCode)
+                    if (!response.Ok && stopOnError)
+                    {
+                        allOk = false;
+                        if (undoGroupId != 0)
+                            Undo.RevertAllDownToGroup(undoGroupId);
                         break;
+                    }
                 }
-                catch (System.Exception ex)
+
+                return UacfResponse.Success(new
                 {
-                    results.Add(new { id, success = false, error = ex.Message });
-                    if (stopOnError) break;
-                }
-            }
-
-            var succeeded = 0;
-            foreach (var r in results)
-            {
-                var dict = r as JObject;
-                if (dict?["success"]?.Value<bool>() == true) succeeded++;
-            }
-
-            ctx.RespondOk(new
-            {
-                results = results,
-                total = results.Count,
-                succeeded = succeeded,
-                failed = results.Count - succeeded
-            });
+                    results,
+                    undoGroup = undoGroup,
+                    allSucceeded = allOk
+                }, 0);
         }
+
+        private static ActionDispatcher GetDispatcher() => UACFBootstrap.GetDispatcher();
     }
 }

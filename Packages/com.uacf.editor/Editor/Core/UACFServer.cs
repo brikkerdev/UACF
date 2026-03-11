@@ -1,12 +1,9 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Net;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using UACF.Config;
-using UACF.Models;
 using Unity.Plastic.Newtonsoft.Json;
 
 namespace UACF.Core
@@ -79,7 +76,7 @@ namespace UACF.Core
             UACFLogger.Log("UACF server stopped");
         }
 
-        private async Task HandleRequestAsync(string method, string path, string query, string body, Stream responseStream)
+        private async Task HandleRequestAsync(string method, string path, string query, string body, string authHeader, Stream responseStream)
         {
             var sw = Stopwatch.StartNew();
             var statusCode = 500;
@@ -87,7 +84,7 @@ namespace UACF.Core
 
             try
             {
-                var ctx = new RequestContext(method, path, query, body, responseStream);
+                var ctx = new RequestContext(method, path, query, body, authHeader, responseStream);
                 var routeTask = _router.Route(ctx);
                 var timeoutTask = Task.Delay(timeoutMs);
                 var completed = await Task.WhenAny(routeTask, timeoutTask);
@@ -96,7 +93,7 @@ namespace UACF.Core
                 {
                     UACFLogger.Log($"Request timeout ({timeoutMs}ms) - editor main thread may be blocked", LogLevel.Warning);
                     statusCode = 503;
-                    var errBody = JsonConvert.SerializeObject(ApiResponse.Fail(ErrorCode.SERVER_BUSY, "Request timed out - editor main thread may be blocked", null, 0));
+                    var errBody = JsonConvert.SerializeObject(Models.UacfResponse.Fail("SERVER_BUSY", "Request timed out - editor main thread may be blocked", "Retry after compilation completes", 0));
                     await TcpHttpServer.WriteResponseAsync(responseStream, 503, errBody);
                     return;
                 }
@@ -109,7 +106,7 @@ namespace UACF.Core
                 UACFLogger.LogError(method, path ?? "/", ex.Message, sw.ElapsedMilliseconds);
                 try
                 {
-                    var errBody = JsonConvert.SerializeObject(ApiResponse.Fail(ErrorCode.INTERNAL_ERROR, ex.Message, null, 0));
+                    var errBody = JsonConvert.SerializeObject(Models.UacfResponse.Fail("INTERNAL_ERROR", ex.Message, ex.StackTrace, 0));
                     await TcpHttpServer.WriteResponseAsync(responseStream, 500, errBody);
                 }
                 catch { }

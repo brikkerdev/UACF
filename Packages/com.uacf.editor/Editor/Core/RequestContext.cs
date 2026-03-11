@@ -28,6 +28,7 @@ namespace UACF.Core
             _context = context;
             _bodyFromTcp = null;
             _responseStream = null;
+            AuthHeader = context.Request?.Headers["Authorization"] ?? "";
             var request = context.Request;
             Method = request.HttpMethod;
             RawPath = request.Url?.AbsolutePath ?? "/";
@@ -36,16 +37,20 @@ namespace UACF.Core
             ParseQueryString(request.Url?.Query);
         }
 
-        public RequestContext(string method, string rawPath, string queryString, string body, Stream responseStream)
+        public string AuthHeader { get; }
+
+        public RequestContext(string method, string rawPath, string queryString, string body, string authHeader, Stream responseStream)
         {
             _context = null;
             _bodyFromTcp = body ?? "";
             _responseStream = responseStream;
+            AuthHeader = authHeader ?? "";
             Method = method ?? "GET";
             try { RawPath = string.IsNullOrEmpty(rawPath) ? "/" : Uri.UnescapeDataString(rawPath); } catch { RawPath = rawPath ?? "/"; }
             Path = NormalizePath(RawPath);
             ParseQueryString(queryString);
         }
+
 
         public void SetPathParams(Dictionary<string, string> pathParams)
         {

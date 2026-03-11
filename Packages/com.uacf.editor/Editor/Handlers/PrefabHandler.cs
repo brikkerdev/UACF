@@ -1,8 +1,9 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
-using Unity.Plastic.Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using Unity.Plastic.Newtonsoft.Json.Linq;
 using UACF.Core;
 using UACF.Models;
 using UACF.Services;
@@ -11,175 +12,227 @@ namespace UACF.Handlers
 {
     public static class PrefabHandler
     {
-        public static void Register(RequestRouter router)
+        public static void Register(ActionDispatcher dispatcher)
         {
-            router.Register("POST", "/api/prefab/create", HandleCreate);
-            router.Register("POST", "/api/prefab/instantiate", HandleInstantiate);
-            router.Register("PUT", "/api/prefab/modify", HandleModify);
-            router.Register("POST", "/api/prefab/apply-overrides", HandleApplyOverrides);
+            dispatcher.Register("prefab.create", HandleCreate);
+            dispatcher.Register("prefab.instantiate", HandleInstantiate);
+            dispatcher.Register("prefab.contents", HandleContents);
+            dispatcher.Register("prefab.edit", HandleEdit);
+            dispatcher.Register("prefab.apply", HandleApply);
+            dispatcher.Register("prefab.revert", HandleRevert);
+            dispatcher.Register("prefab.createVariant", HandleCreateVariant);
         }
 
-        private static async Task HandleCreate(RequestContext ctx)
+        private static GameObject ResolveObject(JObject p)
         {
-            if (EditorApplication.isPlaying)
-            {
-                ResponseHelper.Conflict(ctx, "Exit Play Mode first");
-                return;
-            }
+            var name = p["object"]?.ToString();
+            if (string.IsNullOrEmpty(name)) return null;
+            return GameObjectService.FindByName(name);
+        }
 
-            var body = await ctx.ReadBodyAsync<JObject>();
-            if (body?["source"] == null || body["path"] == null)
+        private static Task<UacfResponse> HandleCreate(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() =>
             {
-                ResponseHelper.InvalidRequest(ctx, "source and path are required");
-                return;
-            }
+                if (EditorApplication.isPlaying)
+                    return UacfResponse.Fail("CONFLICT", "Exit Play Mode first", null, 0);
 
-            var target = body["source"].ToObject<Dictionary<string, object>>();
-            var path = body["path"]?.ToString();
-            var keepConnection = body["keep_connection"]?.Value<bool>() ?? true;
+                var source = p["sourceObject"]?.ToString();
+                var path = p["path"]?.ToString();
+                if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(path))
+                    return UacfResponse.Fail("INVALID_REQUEST", "sourceObject and path are required", null, 0);
 
-            var result = await MainThreadDispatcher.Enqueue(() =>
-            {
-                var go = GameObjectService.FindByTarget(target);
-                if (go == null) return (object)null;
-                var created = PrefabService.CreatePrefab(go, path, keepConnection);
-                return created ? new { path = path, success = true } : (object)null;
+                var go = GameObjectService.FindByName(source);
+                if (go == null)
+                    return UacfResponse.Fail("OBJECT_NOT_FOUND", $"Object '{source}' not found", null, 0);
+
+                var ok = PrefabService.CreatePrefab(go, path);
+                return UacfResponse.Success(new { created = ok, path }, 0);
             });
-
-            if (result == null)
-            {
-                ResponseHelper.NotFound(ctx, "Source GameObject not found");
-                return;
-            }
-            ctx.RespondOk(result);
         }
 
-        private static async Task HandleInstantiate(RequestContext ctx)
+        private static Task<UacfResponse> HandleInstantiate(JObject p)
         {
-            if (EditorApplication.isPlaying)
+            return MainThreadDispatcher.Enqueue(() =>
             {
-                ResponseHelper.Conflict(ctx, "Exit Play Mode first");
-                return;
-            }
+                if (EditorApplication.isPlaying)
+                    return UacfResponse.Fail("CONFLICT", "Exit Play Mode first", null, 0);
 
-            var body = await ctx.ReadBodyAsync<JObject>();
-            if (body?["prefab_path"] == null)
-            {
-                ResponseHelper.InvalidRequest(ctx, "prefab_path is required");
-                return;
-            }
+                var path = p["path"]?.ToString();
+                if (string.IsNullOrEmpty(path))
+                    return UacfResponse.Fail("INVALID_REQUEST", "path is required", null, 0);
 
-            var prefabPath = body["prefab_path"]?.ToString();
-            var name = body["name"]?.ToString();
-            object parentObj = body["parent"]?.Type == JTokenType.Null ? null : body["parent"]?.ToObject<Dictionary<string, object>>();
-            Vector3? position = body["position"] != null ? ParseVector3(body["position"] as JObject) : null;
-            Quaternion? rotation = body["rotation"] != null ? ParseQuaternion(body["rotation"] as JObject) : null;
-            var overrides = body["component_overrides"]?.ToObject<Dictionary<string, Dictionary<string, object>>>();
+                Vector3? pos = null;
+                Quaternion? rot = null;
+                var posArr = p["position"] as JArray;
+                if (posArr != null && posArr.Count >= 3)
+                    pos = new Vector3(posArr[0].Value<float>(), posArr[1].Value<float>(), posArr[2].Value<float>());
+                var rotArr = p["rotation"] as JArray;
+                if (rotArr != null && rotArr.Count >= 3)
+                    rot = Quaternion.Euler(rotArr[0].Value<float>(), rotArr[1].Value<float>(), rotArr[2].Value<float>());
 
-            var result = await MainThreadDispatcher.Enqueue(() =>
-            {
                 Transform parent = null;
-                if (parentObj != null)
-                {
-                    var pGo = GameObjectService.FindByTarget(parentObj as Dictionary<string, object>);
-                    parent = pGo?.transform;
-                }
-                var instance = PrefabService.InstantiatePrefab(prefabPath, name, parent, position, rotation, overrides);
-                return instance != null ? new { instance_id = instance.GetInstanceID(), name = instance.name } : (object)null;
-            });
+                var parentName = p["parent"]?.ToString();
+                if (!string.IsNullOrEmpty(parentName))
+                    parent = GameObjectService.FindByName(parentName)?.transform;
 
-            if (result == null)
-            {
-                ResponseHelper.NotFound(ctx, "Prefab not found or failed to instantiate");
-                return;
-            }
-            ctx.RespondOk(result);
+                var instance = PrefabService.InstantiatePrefab(path, p["name"]?.ToString(), parent, pos, rot);
+                if (instance == null)
+                    return UacfResponse.Fail("PREFAB_NOT_FOUND", "Prefab not found", null, 0);
+
+                return UacfResponse.Success(new { instanceId = instance.GetInstanceID(), name = instance.name }, 0);
+            });
         }
 
-        private static async Task HandleModify(RequestContext ctx)
+        private static Task<UacfResponse> HandleContents(JObject p)
         {
-            if (EditorApplication.isPlaying)
+            return MainThreadDispatcher.Enqueue(() =>
             {
-                ResponseHelper.Conflict(ctx, "Exit Play Mode first");
-                return;
-            }
+                var path = p["path"]?.ToString();
+                if (string.IsNullOrEmpty(path))
+                    return UacfResponse.Fail("INVALID_REQUEST", "path is required", null, 0);
 
-            var body = await ctx.ReadBodyAsync<JObject>();
-            if (body?["prefab_path"] == null || body["operations"] == null)
-            {
-                ResponseHelper.InvalidRequest(ctx, "prefab_path and operations are required");
-                return;
-            }
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                if (prefab == null)
+                    return UacfResponse.Fail("NOT_FOUND", "Prefab not found", null, 0);
 
-            var prefabPath = body["prefab_path"]?.ToString();
-            var ops = new List<PrefabService.PrefabOperation>();
-            foreach (var op in body["operations"] as JArray ?? new JArray())
+                var root = prefab.transform;
+                var hierarchy = SerializePrefabHierarchy(root);
+                return UacfResponse.Success(new { hierarchy }, 0);
+            });
+        }
+
+        private static object SerializePrefabHierarchy(Transform t)
+        {
+            var go = t.gameObject;
+            var children = new List<object>();
+            for (int i = 0; i < t.childCount; i++)
+                children.Add(SerializePrefabHierarchy(t.GetChild(i)));
+
+            return new
             {
-                var jo = op as JObject;
-                if (jo == null) continue;
-                ops.Add(new PrefabService.PrefabOperation
+                name = go.name,
+                components = go.GetComponents<Component>().Where(c => c != null).Select(c => c.GetType().Name).ToArray(),
+                children
+            };
+        }
+
+        private static Task<UacfResponse> HandleEdit(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() =>
+            {
+                if (EditorApplication.isPlaying)
+                    return UacfResponse.Fail("CONFLICT", "Exit Play Mode first", null, 0);
+
+                var path = p["path"]?.ToString();
+                var ops = p["operations"] as JArray;
+                if (string.IsNullOrEmpty(path) || ops == null)
+                    return UacfResponse.Fail("INVALID_REQUEST", "path and operations are required", null, 0);
+
+                var operations = new List<PrefabService.PrefabOperation>();
+                foreach (var op in ops)
                 {
-                    Action = jo["action"]?.ToString(),
-                    TargetPath = jo["target_path"]?.ToString(),
-                    Name = jo["name"]?.ToString(),
-                    Component = jo["component"]?.ToString(),
-                    Fields = jo["fields"]?.ToObject<Dictionary<string, object>>(),
-                    Transform = jo["transform"] != null ? new TransformInfo
+                    var jo = op as JObject;
+                    if (jo == null) continue;
+
+                    var opType = jo["op"]?.ToString() ?? jo["action"]?.ToString();
+                    var target = jo["target"]?.ToString() ?? ".";
+                    var operation = new PrefabService.PrefabOperation { TargetPath = target == "." ? "" : target };
+
+                    if (opType == "addComponent" || opType == "add_component")
                     {
-                        Position = jo["transform"]?["position"]?.ToObject<Vector3Json>()
-                    } : null
-                });
-            }
+                        operation.Action = "add_component";
+                        operation.Component = jo["type"]?.ToString();
+                        operation.Fields = jo["properties"]?.ToObject<Dictionary<string, object>>();
+                    }
+                    else if (opType == "setProperty" || opType == "set_property")
+                    {
+                        operation.Action = "set_fields";
+                        operation.Component = jo["component"]?.ToString();
+                        operation.Fields = new Dictionary<string, object> { [jo["property"]?.ToString() ?? ""] = jo["value"] };
+                    }
+                    else if (opType == "addChild" || opType == "add_child")
+                    {
+                        operation.Action = "add_child";
+                        operation.Name = jo["name"]?.ToString();
+                    }
+                    else if (opType == "removeComponent" || opType == "remove_component")
+                    {
+                        operation.Action = "remove_component";
+                        operation.Component = jo["type"]?.ToString();
+                    }
 
-            var result = await MainThreadDispatcher.Enqueue(() => PrefabService.ModifyPrefab(prefabPath, ops));
-            ctx.RespondOk(new { success = result });
-        }
+                    if (!string.IsNullOrEmpty(operation.Action))
+                        operations.Add(operation);
+                }
 
-        private static async Task HandleApplyOverrides(RequestContext ctx)
-        {
-            if (EditorApplication.isPlaying)
-            {
-                ResponseHelper.Conflict(ctx, "Exit Play Mode first");
-                return;
-            }
-
-            var body = await ctx.ReadBodyAsync<JObject>();
-            if (body?["instance"] == null)
-            {
-                ResponseHelper.InvalidRequest(ctx, "instance is required");
-                return;
-            }
-
-            var target = body["instance"].ToObject<Dictionary<string, object>>();
-            var applyAll = body["apply_all"]?.Value<bool>() ?? true;
-
-            var result = await MainThreadDispatcher.Enqueue(() =>
-            {
-                var go = GameObjectService.FindByTarget(target);
-                if (go == null) return false;
-                return PrefabService.ApplyOverrides(go, applyAll);
+                var ok = PrefabService.ModifyPrefab(path, operations);
+                return UacfResponse.Success(new { modified = ok }, 0);
             });
+        }
 
-            if (!result)
+        private static Task<UacfResponse> HandleApply(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() =>
             {
-                ResponseHelper.NotFound(ctx, "Instance not found or not a prefab instance");
-                return;
-            }
-            ctx.RespondOk(new { applied = true });
+                if (EditorApplication.isPlaying)
+                    return UacfResponse.Fail("CONFLICT", "Exit Play Mode first", null, 0);
+
+                var go = ResolveObject(p);
+                if (go == null)
+                    return UacfResponse.Fail("OBJECT_NOT_FOUND", "Object not found", null, 0);
+
+                if (!PrefabUtility.IsPartOfAnyPrefab(go))
+                    return UacfResponse.Fail("INVALID_REQUEST", "Object is not a prefab instance", null, 0);
+
+                PrefabUtility.ApplyPrefabInstance(go, InteractionMode.AutomatedAction);
+                return UacfResponse.Success(new { applied = true }, 0);
+            });
         }
 
-        private static Vector3? ParseVector3(JObject o)
+        private static Task<UacfResponse> HandleRevert(JObject p)
         {
-            if (o == null) return null;
-            return new Vector3(o["x"]?.Value<float>() ?? 0, o["y"]?.Value<float>() ?? 0, o["z"]?.Value<float>() ?? 0);
+            return MainThreadDispatcher.Enqueue(() =>
+            {
+                if (EditorApplication.isPlaying)
+                    return UacfResponse.Fail("CONFLICT", "Exit Play Mode first", null, 0);
+
+                var go = ResolveObject(p);
+                if (go == null)
+                    return UacfResponse.Fail("OBJECT_NOT_FOUND", "Object not found", null, 0);
+
+                if (!PrefabUtility.IsPartOfAnyPrefab(go))
+                    return UacfResponse.Fail("INVALID_REQUEST", "Object is not a prefab instance", null, 0);
+
+                PrefabUtility.RevertPrefabInstance(go, InteractionMode.AutomatedAction);
+                return UacfResponse.Success(new { reverted = true }, 0);
+            });
         }
 
-        private static Quaternion? ParseQuaternion(JObject o)
+        private static Task<UacfResponse> HandleCreateVariant(JObject p)
         {
-            if (o == null) return null;
-            if (o["w"] != null)
-                return new Quaternion(o["x"]?.Value<float>() ?? 0, o["y"]?.Value<float>() ?? 0, o["z"]?.Value<float>() ?? 0, o["w"]?.Value<float>() ?? 1);
-            return Quaternion.Euler(o["x"]?.Value<float>() ?? 0, o["y"]?.Value<float>() ?? 0, o["z"]?.Value<float>() ?? 0);
+            return MainThreadDispatcher.Enqueue(() =>
+            {
+                if (EditorApplication.isPlaying)
+                    return UacfResponse.Fail("CONFLICT", "Exit Play Mode first", null, 0);
+
+                var basePath = p["basePrefab"]?.ToString();
+                var path = p["path"]?.ToString();
+                if (string.IsNullOrEmpty(basePath) || string.IsNullOrEmpty(path))
+                    return UacfResponse.Fail("INVALID_REQUEST", "basePrefab and path are required", null, 0);
+
+                var basePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(basePath);
+                if (basePrefab == null)
+                    return UacfResponse.Fail("NOT_FOUND", "Base prefab not found", null, 0);
+
+                var instance = PrefabUtility.InstantiatePrefab(basePrefab) as GameObject;
+                if (instance == null)
+                    return UacfResponse.Fail("INTERNAL_ERROR", "Failed to instantiate", null, 0);
+
+                PrefabUtility.SaveAsPrefabAsset(instance, path);
+                Object.DestroyImmediate(instance);
+                return UacfResponse.Success(new { created = true, path }, 0);
+            });
         }
     }
 }

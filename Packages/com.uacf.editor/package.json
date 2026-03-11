@@ -1,7 +1,7 @@
 {
   "name": "com.uacf.editor",
   "displayName": "UACF - Unity Autonomous Control Framework",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "unity": "6000.3",
   "description": "HTTP API server in Unity Editor for AI agents to control the project via curl. Enables Cursor, Claude Code and other agents to manage Unity projects without manual interaction.",
   "keywords": [

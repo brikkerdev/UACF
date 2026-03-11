@@ -1,37 +1,47 @@
+using System.Linq;
 using NUnit.Framework;
 using UACF.Core;
-using UACF.Handlers;
 
 namespace UACF.Tests
 {
     public class ServerTests
     {
         [Test]
-        public void RequestRouter_RegistersAndMatchesExactPath()
+        public void RequestRouter_AcceptsUacfEndpoint()
         {
-            var router = new RequestRouter();
-            var called = false;
-            router.Register("GET", "/api/status", ctx =>
-            {
-                called = true;
-                return System.Threading.Tasks.Task.CompletedTask;
-            });
-
-            Assert.IsTrue(called == false);
+            var dispatcher = new ActionDispatcher();
+            var handler = new UacfEndpointHandler(dispatcher);
+            var router = new RequestRouter(handler);
+            Assert.IsNotNull(router);
         }
 
         [Test]
-        public void RequestRouter_MatchesPathWithParams()
+        public void ActionsRegistry_HasApiActions()
         {
-            var router = new RequestRouter();
-            string capturedId = null;
-            router.Register("GET", "/api/objects/{id}", ctx =>
-            {
-                capturedId = ctx.PathParams.TryGetValue("id", out var v) ? v : null;
-                return System.Threading.Tasks.Task.CompletedTask;
-            });
+            var actions = ActionsRegistry.All;
+            Assert.IsNotNull(actions);
+            Assert.Greater(actions.Count, 0);
+            Assert.IsTrue(actions.Any(a => a.Action == "api.list"));
+        }
 
-            Assert.IsNotNull(router);
+        [Test]
+        public void UacfResponse_SuccessFormat()
+        {
+            var r = UACF.Models.UacfResponse.Success(new { test = 1 }, 0.5);
+            Assert.IsTrue(r.Ok);
+            Assert.IsNotNull(r.Data);
+            Assert.AreEqual(0.5, r.Duration);
+        }
+
+        [Test]
+        public void UacfResponse_FailFormat()
+        {
+            var r = UACF.Models.UacfResponse.Fail("TEST", "message", "suggestion", 0.1);
+            Assert.IsFalse(r.Ok);
+            Assert.IsNotNull(r.Error);
+            Assert.AreEqual("TEST", r.Error.Code);
+            Assert.AreEqual("message", r.Error.Message);
+            Assert.AreEqual("suggestion", r.Error.Suggestion);
         }
     }
 }

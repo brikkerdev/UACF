@@ -33,9 +33,10 @@ namespace UACF.UI
             EditorGUILayout.LabelField("Uptime:", $"{UACFServer.UptimeSeconds} seconds");
 
             EditorGUILayout.Space(10);
-            if (GUILayout.Button("Open in Browser"))
+            EditorGUILayout.HelpBox("All requests: POST /uacf with {\"action\":\"api.list\",\"params\":{}}", MessageType.Info);
+            if (GUILayout.Button("Copy curl command"))
             {
-                Application.OpenURL($"http://localhost:{server.Port}/api/status");
+                EditorGUIUtility.systemCopyBuffer = $"curl -X POST http://localhost:{server.Port}/uacf -H \"Content-Type: application/json\" -d '{{\"action\":\"api.list\"}}'";
             }
         }
     }

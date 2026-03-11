@@ -16,11 +16,11 @@ namespace UACF.Core
         private CancellationTokenSource _cts;
         private volatile bool _isRunning;
         private int _port;
-        private readonly Func<string, string, string, string, Stream, Task> _handleRequest;
+        private readonly Func<string, string, string, string, string, Stream, Task> _handleRequest;
 
         public int Port => _port;
 
-        public TcpHttpServer(Func<string, string, string, string, Stream, Task> handleRequest)
+        public TcpHttpServer(Func<string, string, string, string, string, Stream, Task> handleRequest)
         {
             _handleRequest = handleRequest;
         }
@@ -78,10 +78,10 @@ namespace UACF.Core
             {
                 try
                 {
-                    var (method, path, query, body) = await ParseRequestAsync(stream);
+                    var (method, path, query, body, authHeader) = await ParseRequestAsync(stream);
                     if (method == null) return;
 
-                    await _handleRequest(method, path, query, body, stream);
+                    await _handleRequest(method, path, query, body, authHeader, stream);
                 }
                 catch (Exception ex)
                 {
@@ -91,14 +91,14 @@ namespace UACF.Core
             }
         }
 
-        private static async Task<(string method, string path, string query, string body)> ParseRequestAsync(NetworkStream stream)
+        private static async Task<(string method, string path, string query, string body, string authHeader)> ParseRequestAsync(NetworkStream stream)
         {
             var buffer = new byte[8192];
             var total = 0;
             while (total < buffer.Length)
             {
                 var n = await stream.ReadAsync(buffer, total, buffer.Length - total);
-                if (n == 0) return (null, null, null, null);
+                if (n == 0) return (null, null, null, null, null);
                 total += n;
                 var text = Encoding.UTF8.GetString(buffer, 0, total);
                 var headerEnd = text.IndexOf("\r\n\r\n", StringComparison.Ordinal);
@@ -110,7 +110,7 @@ namespace UACF.Core
 
                 var firstLine = headers.Split(new[] { "\r\n" }, StringSplitOptions.None)[0];
                 var parts = firstLine.Split(new[] { ' ' }, 3);
-                if (parts.Length < 2) return (null, null, null, null);
+                if (parts.Length < 2) return (null, null, null, null, null);
 
                 var method = parts[0];
                 var pathAndQuery = parts[1];
@@ -119,13 +119,13 @@ namespace UACF.Core
                 var query = qIdx >= 0 ? pathAndQuery.Substring(qIdx + 1) : "";
 
                 var contentLength = 0;
+                var authHeader = "";
                 foreach (var line in headers.Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries))
                 {
                     if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
-                    {
                         int.TryParse(line.Substring(15).Trim(), out contentLength);
-                        break;
-                    }
+                    else if (line.StartsWith("Authorization:", StringComparison.OrdinalIgnoreCase))
+                        authHeader = line.Substring(14).Trim();
                 }
 
                 var body = "";
@@ -144,9 +144,9 @@ namespace UACF.Core
                     body = Encoding.UTF8.GetString(bodyBytes, 0, bodyOffset);
                 }
 
-                return (method, path, query, body);
+                return (method, path, query, body, authHeader);
             }
-            return (null, null, null, null);
+            return (null, null, null, null, null);
         }
 
         private static async Task WriteErrorResponse(NetworkStream stream, int status, string message)

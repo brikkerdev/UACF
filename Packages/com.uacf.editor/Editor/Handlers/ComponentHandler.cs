@@ -1,142 +1,91 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Unity.Plastic.Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
+using Unity.Plastic.Newtonsoft.Json.Linq;
 using UACF.Core;
 using UACF.Models;
 using UACF.Services;
 
 namespace UACF.Handlers
 {
-    internal class TypeNotFoundException : System.Exception
-    {
-        public string TypeName { get; }
-        public string[] Suggestions { get; }
-        public TypeNotFoundException(string typeName, string[] suggestions) : base($"Type '{typeName}' not found")
-        {
-            TypeName = typeName;
-            Suggestions = suggestions ?? new string[0];
-        }
-    }
-
     public static class ComponentHandler
     {
-        public static void Register(RequestRouter router)
+        public static void Register(ActionDispatcher dispatcher)
         {
-            router.Register("POST", "/api/component/add", HandleAdd);
-            router.Register("GET", "/api/component/get", HandleGet);
-            router.Register("PUT", "/api/component/set-fields", HandleSetFields);
-            router.Register("DELETE", "/api/component/remove", HandleRemove);
-            router.Register("GET", "/api/component/list-types", HandleListTypes);
+            dispatcher.Register("component.list", HandleList);
+            dispatcher.Register("component.get", HandleGet);
+            dispatcher.Register("component.add", HandleAdd);
+            dispatcher.Register("component.set", HandleSet);
+            dispatcher.Register("component.remove", HandleRemove);
+            dispatcher.Register("component.setEnabled", HandleSetEnabled);
+            dispatcher.Register("component.serialized.get", HandleSerializedGet);
+            dispatcher.Register("component.serialized.set", HandleSerializedSet);
         }
 
-        private static async Task HandleAdd(RequestContext ctx)
+        private static GameObject ResolveObject(JObject p)
         {
-            if (EditorApplication.isPlaying)
+            var obj = p["object"];
+            if (obj == null) return null;
+
+            if (obj is JValue jv)
             {
-                ResponseHelper.Conflict(ctx, "Exit Play Mode first");
-                return;
+                var s = jv.ToString();
+                if (int.TryParse(s, out var id))
+                    return EditorUtility.InstanceIDToObject(id) as GameObject;
+                return GameObjectService.FindByName(s);
             }
-
-            var body = await ctx.ReadBodyAsync<JObject>();
-            if (body?["target"] == null || body["component_type"] == null)
-            {
-                ResponseHelper.InvalidRequest(ctx, "target and component_type are required");
-                return;
-            }
-
-            var target = body["target"].ToObject<Dictionary<string, object>>();
-            var componentType = body["component_type"]?.ToString();
-            var fields = body["fields"]?.ToObject<Dictionary<string, object>>();
-
-            try
-            {
-                var result = await MainThreadDispatcher.Enqueue(() =>
-                {
-                    var go = GameObjectService.FindByTarget(target);
-                    if (go == null) return (object)null;
-
-                    var type = TypeResolverService.Instance.Resolve(componentType);
-                    if (type == null)
-                    {
-                        var suggestions = TypeResolverService.Instance.GetSuggestions(componentType);
-                        throw new TypeNotFoundException(componentType, suggestions);
-                    }
-
-                    var comp = ComponentService.AddComponent(go, componentType, fields);
-                    return comp != null ? new { component_added = componentType } : (object)null;
-                });
-
-                if (result == null)
-            {
-                    ResponseHelper.NotFound(ctx, "GameObject not found");
-                    return;
-                }
-                ctx.RespondOk(result);
-            }
-            catch (TypeNotFoundException ex)
-            {
-                ResponseHelper.Unprocessable(ctx, Models.ErrorCode.TYPE_NOT_FOUND, $"Type '{ex.TypeName}' not found", new { suggestions = ex.Suggestions });
-            }
+            return GameObjectService.FindByName(obj.ToString());
         }
 
-        private static async Task HandleGet(RequestContext ctx)
+        private static Task<UacfResponse> HandleList(JObject p)
         {
-            var instanceIdStr = ctx.QueryParams.TryGetValue("instance_id", out var i) ? i : null;
-            var component = ctx.QueryParams.TryGetValue("component", out var c) ? c : null;
-            var index = ctx.QueryParams.TryGetValue("index", out var idx) && int.TryParse(idx, out var ix) ? ix : 0;
-
-            if (string.IsNullOrEmpty(instanceIdStr) || string.IsNullOrEmpty(component))
+            return MainThreadDispatcher.Enqueue(() =>
             {
-                ResponseHelper.InvalidRequest(ctx, "instance_id and component are required");
-                return;
-            }
+                var go = ResolveObject(p);
+                if (go == null)
+                    return UacfResponse.Fail("OBJECT_NOT_FOUND", "Object not found", null, 0);
 
-            if (!int.TryParse(instanceIdStr, out var instanceId))
+                var comps = go.GetComponents<Component>().Where(c => c != null).Select(c => c.GetType().Name).ToArray();
+                return UacfResponse.Success(new { components = comps }, 0);
+            });
+        }
+
+        private static Task<UacfResponse> HandleGet(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() =>
             {
-                ResponseHelper.InvalidRequest(ctx, "instance_id must be a number");
-                return;
-            }
+                var go = ResolveObject(p);
+                if (go == null)
+                    return UacfResponse.Fail("OBJECT_NOT_FOUND", "Object not found", null, 0);
 
-            var data = await MainThreadDispatcher.Enqueue(() =>
-            {
-#pragma warning disable CS0618
-                var go = EditorUtility.InstanceIDToObject(instanceId) as GameObject;
-#pragma warning restore CS0618
-                if (go == null) return (object)null;
+                var component = p["component"]?.ToString();
+                if (string.IsNullOrEmpty(component))
+                    return UacfResponse.Fail("INVALID_REQUEST", "component is required", null, 0);
 
-                var comp = ComponentService.GetComponent(go, component, index);
-                if (comp == null) return (object)null;
+                var comp = ComponentService.GetComponent(go, component, 0);
+                if (comp == null)
+                    return UacfResponse.Fail("COMPONENT_NOT_FOUND", $"Component '{component}' not found", null, 0);
 
                 var so = new SerializedObject(comp);
-                var fields = new Dictionary<string, object>();
+                var props = new Dictionary<string, object>();
                 var it = so.GetIterator();
                 it.Next(true);
                 while (it.Next(false))
                 {
                     if (it.propertyType == SerializedPropertyType.Generic && it.depth > 2) continue;
                     var val = GetPropertyValue(it);
-                    if (val != null)
-                        fields[it.name] = val;
+                    if (val != null) props[it.name] = val;
                 }
 
-                return new
+                return UacfResponse.Success(new
                 {
-                    component_type = comp.GetType().Name,
-                    game_object = go.name,
-                    instance_id = comp.GetInstanceID(),
-                    fields = fields
-                };
+                    type = comp.GetType().Name,
+                    enabled = (comp as Behaviour)?.enabled ?? true,
+                    properties = props
+                }, 0);
             });
-
-            if (data == null)
-            {
-                ResponseHelper.NotFound(ctx, "Component or GameObject not found");
-                return;
-            }
-            ctx.RespondOk(data);
         }
 
         private static object GetPropertyValue(SerializedProperty prop)
@@ -147,131 +96,182 @@ namespace UACF.Handlers
                 case SerializedPropertyType.Float: return prop.floatValue;
                 case SerializedPropertyType.Boolean: return prop.boolValue;
                 case SerializedPropertyType.String: return prop.stringValue;
-                case SerializedPropertyType.Vector2: return new { x = prop.vector2Value.x, y = prop.vector2Value.y };
-                case SerializedPropertyType.Vector3: return new { x = prop.vector3Value.x, y = prop.vector3Value.y, z = prop.vector3Value.z };
+                case SerializedPropertyType.Vector2: return new[] { prop.vector2Value.x, prop.vector2Value.y };
+                case SerializedPropertyType.Vector3: return new[] { prop.vector3Value.x, prop.vector3Value.y, prop.vector3Value.z };
                 case SerializedPropertyType.ObjectReference:
                     var obj = prop.objectReferenceValue;
-                    return obj != null ? new { value = obj.name, type = obj.GetType().Name } : null;
+                    return obj != null ? new { name = obj.name, instanceId = obj.GetInstanceID() } : null;
                 case SerializedPropertyType.Enum: return prop.enumNames[prop.enumValueIndex];
                 default: return null;
             }
         }
 
-        private static async Task HandleSetFields(RequestContext ctx)
+        private static Task<UacfResponse> HandleAdd(JObject p)
         {
-            if (EditorApplication.isPlaying)
+            return MainThreadDispatcher.Enqueue(() =>
             {
-                ResponseHelper.Conflict(ctx, "Exit Play Mode first");
-                return;
-            }
+                if (EditorApplication.isPlaying)
+                    return UacfResponse.Fail("CONFLICT", "Exit Play Mode first", null, 0);
 
-            var body = await ctx.ReadBodyAsync<JObject>();
-            if (body?["target"] == null || body["component"] == null || body["fields"] == null)
-            {
-                ResponseHelper.InvalidRequest(ctx, "target, component, and fields are required");
-                return;
-            }
+                var go = ResolveObject(p);
+                if (go == null)
+                    return UacfResponse.Fail("OBJECT_NOT_FOUND", "Object not found", null, 0);
 
-            var target = body["target"].ToObject<Dictionary<string, object>>();
-            var component = body["component"]?.ToString();
-            var index = body["index"]?.Value<int>() ?? 0;
-            var fields = body["fields"]?.ToObject<Dictionary<string, object>>();
+                var type = p["type"]?.ToString();
+                if (string.IsNullOrEmpty(type))
+                    return UacfResponse.Fail("INVALID_REQUEST", "type is required", null, 0);
 
-            var result = await MainThreadDispatcher.Enqueue(() =>
-            {
-                var go = GameObjectService.FindByTarget(target);
-                if (go == null) return (object)null;
-
-                var comp = ComponentService.GetComponent(go, component, index);
-                if (comp == null) return (object)null;
-
-                ComponentService.SetFields(comp, fields);
-                return new
+                var resolved = TypeResolverService.Instance.Resolve(type);
+                if (resolved == null)
                 {
-                    fields_set = fields.Select(f => new { name = f.Key, value = f.Value, status = "ok" }).ToArray(),
-                    fields_failed = new object[0],
-                    total_set = fields.Count,
-                    total_failed = 0
-                };
-            });
+                    var suggestions = TypeResolverService.Instance.GetSuggestions(type);
+                    return UacfResponse.Fail("TYPE_NOT_FOUND", $"Type '{type}' not found", string.Join(", ", suggestions ?? new string[0]), 0);
+                }
 
-            if (result == null)
-            {
-                ResponseHelper.NotFound(ctx, "GameObject or component not found");
-                return;
-            }
-            ctx.RespondOk(result);
+                var props = p["properties"]?.ToObject<Dictionary<string, object>>();
+                var comp = ComponentService.AddComponent(go, type, props);
+                if (comp == null)
+                    return UacfResponse.Fail("INTERNAL_ERROR", "Failed to add component", null, 0);
+
+                return UacfResponse.Success(new { componentAdded = type }, 0);
+            });
         }
 
-        private static async Task HandleRemove(RequestContext ctx)
+        private static Task<UacfResponse> HandleSet(JObject p)
         {
-            if (EditorApplication.isPlaying)
+            return MainThreadDispatcher.Enqueue(() =>
             {
-                ResponseHelper.Conflict(ctx, "Exit Play Mode first");
-                return;
-            }
+                if (EditorApplication.isPlaying)
+                    return UacfResponse.Fail("CONFLICT", "Exit Play Mode first", null, 0);
 
-            var body = await ctx.ReadBodyAsync<JObject>();
-            if (body?["target"] == null || body["component"] == null)
+                var go = ResolveObject(p);
+                if (go == null)
+                    return UacfResponse.Fail("OBJECT_NOT_FOUND", "Object not found", null, 0);
+
+                var component = p["component"]?.ToString();
+                if (string.IsNullOrEmpty(component))
+                    return UacfResponse.Fail("INVALID_REQUEST", "component is required", null, 0);
+
+                var props = p["properties"]?.ToObject<Dictionary<string, object>>();
+                if (props == null || props.Count == 0)
+                    return UacfResponse.Fail("INVALID_REQUEST", "properties is required", null, 0);
+
+                var comp = ComponentService.GetComponent(go, component, 0);
+                if (comp == null)
+                    return UacfResponse.Fail("COMPONENT_NOT_FOUND", $"Component '{component}' not found", null, 0);
+
+                ComponentService.SetFields(comp, props);
+                return UacfResponse.Success(new { updated = true }, 0);
+            });
+        }
+
+        private static Task<UacfResponse> HandleRemove(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() =>
             {
-                ResponseHelper.InvalidRequest(ctx, "target and component are required");
-                return;
-            }
+                if (EditorApplication.isPlaying)
+                    return UacfResponse.Fail("CONFLICT", "Exit Play Mode first", null, 0);
 
-            var target = body["target"].ToObject<Dictionary<string, object>>();
-            var component = body["component"]?.ToString();
-            var index = body["index"]?.Value<int>() ?? 0;
+                var go = ResolveObject(p);
+                if (go == null)
+                    return UacfResponse.Fail("OBJECT_NOT_FOUND", "Object not found", null, 0);
 
-            var result = await MainThreadDispatcher.Enqueue(() =>
-            {
-                var go = GameObjectService.FindByTarget(target);
-                if (go == null) return false;
+                var component = p["component"]?.ToString();
+                if (string.IsNullOrEmpty(component))
+                    return UacfResponse.Fail("INVALID_REQUEST", "component is required", null, 0);
 
-                var comp = ComponentService.GetComponent(go, component, index);
-                if (comp == null || comp is Transform) return false;
+                var comp = ComponentService.GetComponent(go, component, 0);
+                if (comp == null || comp is Transform)
+                    return UacfResponse.Fail("COMPONENT_NOT_FOUND", "Cannot remove Transform", null, 0);
 
                 ComponentService.RemoveComponent(comp);
-                return true;
+                return UacfResponse.Success(new { removed = true }, 0);
             });
-
-            if (!result)
-            {
-                ResponseHelper.NotFound(ctx, "GameObject or component not found");
-                return;
-            }
-            ctx.RespondOk(new { removed = true });
         }
 
-        private static async Task HandleListTypes(RequestContext ctx)
+        private static Task<UacfResponse> HandleSetEnabled(JObject p)
         {
-            var filter = ctx.QueryParams.TryGetValue("filter", out var f) ? f : null;
-            var category = ctx.QueryParams.TryGetValue("category", out var c) ? c : "all";
-
-            var data = await MainThreadDispatcher.Enqueue(() =>
+            return MainThreadDispatcher.Enqueue(() =>
             {
-                var types = new List<ComponentTypeInfo>();
-                foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
-                {
-                    try
-                    {
-                        foreach (var t in asm.GetTypes().Where(x => typeof(Component).IsAssignableFrom(x) && !x.IsAbstract))
-                        {
-                            if (!string.IsNullOrEmpty(filter) && !t.Name.Contains(filter)) continue;
-                            var cat = t.Namespace?.StartsWith("UnityEngine") == true ? "unity" : "custom";
-                            if (category != "all" && category != cat) continue;
-                            types.Add(new ComponentTypeInfo
-                            {
-                                Name = t.Name,
-                                FullName = t.FullName ?? t.Name,
-                                Category = cat
-                            });
-                        }
-                    }
-                    catch { }
-                }
-                return new { types = types.Take(500).ToArray() };
+                if (EditorApplication.isPlaying)
+                    return UacfResponse.Fail("CONFLICT", "Exit Play Mode first", null, 0);
+
+                var go = ResolveObject(p);
+                if (go == null)
+                    return UacfResponse.Fail("OBJECT_NOT_FOUND", "Object not found", null, 0);
+
+                var component = p["component"]?.ToString();
+                if (string.IsNullOrEmpty(component))
+                    return UacfResponse.Fail("INVALID_REQUEST", "component is required", null, 0);
+
+                var enabled = p["enabled"]?.Value<bool>() ?? false;
+
+                var comp = ComponentService.GetComponent(go, component, 0) as Behaviour;
+                if (comp == null)
+                    return UacfResponse.Fail("COMPONENT_NOT_FOUND", "Component not found or not a Behaviour", null, 0);
+
+                Undo.RecordObject(comp, "UACF Set Enabled");
+                comp.enabled = enabled;
+                return UacfResponse.Success(new { enabled = comp.enabled }, 0);
             });
-            ctx.RespondOk(data);
+        }
+
+        private static Task<UacfResponse> HandleSerializedGet(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() =>
+            {
+                var go = ResolveObject(p);
+                if (go == null)
+                    return UacfResponse.Fail("OBJECT_NOT_FOUND", "Object not found", null, 0);
+
+                var component = p["component"]?.ToString();
+                if (string.IsNullOrEmpty(component))
+                    return UacfResponse.Fail("INVALID_REQUEST", "component is required", null, 0);
+
+                var comp = ComponentService.GetComponent(go, component, 0);
+                if (comp == null)
+                    return UacfResponse.Fail("COMPONENT_NOT_FOUND", "Component not found", null, 0);
+
+                var so = new SerializedObject(comp);
+                var props = new List<object>();
+                var it = so.GetIterator();
+                it.Next(true);
+                while (it.Next(false))
+                {
+                    if (it.depth > 1) continue;
+                    props.Add(new { name = it.name, type = it.propertyType.ToString(), value = GetPropertyValue(it) });
+                }
+
+                return UacfResponse.Success(new { properties = props }, 0);
+            });
+        }
+
+        private static Task<UacfResponse> HandleSerializedSet(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() =>
+            {
+                if (EditorApplication.isPlaying)
+                    return UacfResponse.Fail("CONFLICT", "Exit Play Mode first", null, 0);
+
+                var go = ResolveObject(p);
+                if (go == null)
+                    return UacfResponse.Fail("OBJECT_NOT_FOUND", "Object not found", null, 0);
+
+                var component = p["component"]?.ToString();
+                if (string.IsNullOrEmpty(component))
+                    return UacfResponse.Fail("INVALID_REQUEST", "component is required", null, 0);
+
+                var props = p["properties"]?.ToObject<Dictionary<string, object>>();
+                if (props == null)
+                    return UacfResponse.Fail("INVALID_REQUEST", "properties is required", null, 0);
+
+                var comp = ComponentService.GetComponent(go, component, 0);
+                if (comp == null)
+                    return UacfResponse.Fail("COMPONENT_NOT_FOUND", "Component not found", null, 0);
+
+                ComponentService.SetFields(comp, props);
+                return UacfResponse.Success(new { updated = true }, 0);
+            });
         }
     }
 }

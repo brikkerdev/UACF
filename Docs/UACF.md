@@ -1,1899 +1,1047 @@
-# Техническое задание: Unity Autonomous Control Framework (UACF)
 
-## 1. Общее описание
 
-### 1.1 Назначение
-UPM-пакет для Unity 6.3, предоставляющий встроенный HTTP API сервер в Unity Editor. Позволяет внешним AI-агентам (Cursor, Claude Code) полностью управлять проектом Unity через терминальные команды (`curl`), без ручного взаимодействия с редактором.
-
-### 1.2 Целевой сценарий использования
-```
-AI-агент (Cursor / Claude Code)
-    │
-    ├── Создаёт/редактирует .cs файлы напрямую в Assets/
-    │
-    ├── curl → POST /api/assets/refresh
-    ├── curl → GET  /api/compile/status
-    ├── curl → GET  /api/compile/errors
-    ├── curl → POST /api/scene/add-object
-    ├── curl → POST /api/scene/attach-component
-    ├── curl → POST /api/scene/set-field
-    ├── curl → POST /api/scene/save
-    │
-    └── Человек нажимает Play
-```
-
-### 1.3 Ключевые принципы
-- **Zero human interaction** — все операции через API, никаких диалоговых окон
-- **Синхронный ответ** — каждый запрос возвращает результат выполнения
-- **Main thread safety** — все Unity API вызовы диспатчатся в основной поток
-- **Идемпотентность** — повторный вызов с теми же параметрами не ломает состояние
-- **Детальные ошибки** — каждый ответ содержит достаточно информации для агента
+# ТЗ: UACF v1.1
 
 ---
 
-## 2. Архитектура
-
-### 2.1 Структура пакета (UPM)
+## Философия
 
 ```
-com.uacf.editor/
-├── package.json
-├── README.md
-├── CHANGELOG.md
-├── Editor/
-│   ├── com.uacf.editor.asmdef
-│   │
-│   ├── Core/
-│   │   ├── UACFServer.cs              # HTTP-сервер (HttpListener)
-│   │   ├── UACFBootstrap.cs           # [InitializeOnLoad] автозапуск
-│   │   ├── MainThreadDispatcher.cs    # Диспатчер в основной поток
-│   │   ├── RequestRouter.cs           # Маршрутизация URL → Handler
-│   │   ├── RequestContext.cs          # Обёртка над HttpListenerContext
-│   │   └── ResponseHelper.cs         # Формирование JSON-ответов
-│   │
-│   ├── Handlers/
-│   │   ├── AssetsHandler.cs           # /api/assets/*
-│   │   ├── CompileHandler.cs          # /api/compile/*
-│   │   ├── SceneHandler.cs            # /api/scene/*
-│   │   ├── PrefabHandler.cs           # /api/prefab/*
-│   │   ├── GameObjectHandler.cs       # /api/gameobject/*
-│   │   ├── ComponentHandler.cs        # /api/component/*
-│   │   ├── ProjectHandler.cs          # /api/project/*
-│   │   └── FileHandler.cs            # /api/file/*
-│   │
-│   ├── Services/
-│   │   ├── CompilationService.cs      # Обёртка над CompilationPipeline
-│   │   ├── SceneService.cs            # Обёртка над EditorSceneManager
-│   │   ├── PrefabService.cs           # Обёртка над PrefabUtility
-│   │   ├── GameObjectService.cs       # Создание/поиск/удаление объектов
-│   │   ├── ComponentService.cs        # Добавление компонентов, установка полей
-│   │   ├── AssetDatabaseService.cs    # Обёртка над AssetDatabase
-│   │   ├── SerializationService.cs    # Сериализация состояния сцены в JSON
-│   │   └── TypeResolverService.cs     # Поиск типов по имени строки
-│   │
-│   ├── Models/
-│   │   ├── ApiResponse.cs             # Базовая модель ответа
-│   │   ├── CompileError.cs            # Модель ошибки компиляции
-│   │   ├── GameObjectInfo.cs          # Модель описания GameObject
-│   │   ├── ComponentInfo.cs           # Модель описания компонента
-│   │   ├── FieldInfo.cs               # Модель описания поля
-│   │   └── SceneInfo.cs               # Модель описания сцены
-│   │
-│   ├── Config/
-│   │   └── UACFSettings.cs            # ScriptableSingleton настройки
-│   │
-│   └── UI/
-│       └── UACFEditorWindow.cs        # Окно статуса сервера (опционально)
-│
-└── Tests/
-    └── Editor/
-        ├── com.uacf.editor.tests.asmdef
-        ├── ServerTests.cs
-        ├── SceneHandlerTests.cs
-        └── CompileHandlerTests.cs
-```
-
-### 2.2 Диаграмма компонентов
-
-```
-┌────────────────────────────────────────────────────────────┐
-│                      Unity Editor Process                   │
-│                                                            │
-│  ┌──────────────┐    ┌─────────────────┐                  │
-│  │ UACFBootstrap │───►│   UACFServer    │                  │
-│  │ [InitOnLoad]  │    │  (HttpListener) │                  │
-│  └──────────────┘    │  port: 7890     │                  │
-│                      └────────┬────────┘                  │
-│                               │                            │
-│                      ┌────────▼────────┐                  │
-│                      │  RequestRouter   │                  │
-│                      └────────┬────────┘                  │
-│                               │                            │
-│          ┌────────────────────┼────────────────────┐      │
-│          ▼                    ▼                    ▼      │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
-│  │AssetsHandler  │  │CompileHandler│  │ SceneHandler  │   │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘   │
-│         │                  │                  │           │
-│         ▼                  ▼                  ▼           │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
-│  │AssetDBService│  │CompileService│  │ SceneService  │   │
-│  └──────────────┘  └──────────────┘  └──────────────┘   │
-│         │                  │                  │           │
-│         └──────────────────┼──────────────────┘           │
-│                            ▼                               │
-│                  ┌──────────────────┐                      │
-│                  │MainThreadDispatch│                      │
-│                  │  (EditorApp.     │                      │
-│                  │   update loop)   │                      │
-│                  └──────────────────┘                      │
-└────────────────────────────────────────────────────────────┘
-         ▲
-         │ HTTP (localhost:7890)
-         │
-┌────────┴───────┐
-│  curl / Agent   │
-└────────────────┘
+Агент должен уметь делать ВСЁ, что может делать человек в Unity Editor,
+и получать полную обратную связь о результате.
+Один протокол. Один формат. Curl — единственный инструмент.
 ```
 
 ---
 
-## 3. Компонент: Core
+## Единый формат запросов
 
-### 3.1 UACFBootstrap.cs
+**Все запросы — POST с JSON телом.**
 
-```
-[InitializeOnLoad] статический класс
-- При загрузке Editor автоматически запускает UACFServer
-- Подписывается на EditorApplication.quitting для остановки сервера
-- Подписывается на AssemblyReloadEvents для корректной перезагрузки
-- Подписывается на CompilationPipeline.compilationFinished
-- Проверяет UACFSettings для определения порта и auto-start флага
-```
-
-**Жизненный цикл:**
-```
-Editor Start
-    → [InitializeOnLoad] UACFBootstrap.Initialize()
-        → UACFServer.Start(port)
-
-Domain Reload (после компиляции)
-    → AssemblyReloadEvents.beforeAssemblyReload
-        → UACFServer.Stop()
-    → AssemblyReloadEvents.afterAssemblyReload
-        → UACFServer.Start(port)
-
-Editor Quit
-    → EditorApplication.quitting
-        → UACFServer.Stop()
-```
-
-### 3.2 UACFServer.cs
-
-```
-Класс, управляющий HttpListener.
-
-Поля:
-- HttpListener _listener
-- Thread _listenerThread
-- CancellationTokenSource _cts
-- bool _isRunning
-- int _port (default: 7890)
-- RequestRouter _router
-
-Методы:
-- Start(int port) — запуск listener на http://localhost:{port}/
-- Stop() — graceful shutdown
-- ListenLoop() — цикл приёма запросов в фоновом потоке
-- HandleRequest(HttpListenerContext) — передача в RequestRouter
-
-Особенности:
-- Listener работает в background thread
-- Каждый запрос обрабатывается через ThreadPool
-- Если нужен доступ к Unity API — через MainThreadDispatcher
-- Таймаут обработки запроса: 30 секунд (для долгих операций типа компиляции)
-- При ошибке порта — попытка port+1, port+2 (до 3 попыток)
-```
-
-### 3.3 MainThreadDispatcher.cs
-
-```
-Статический класс для выполнения действий в основном потоке Unity Editor.
-
-Механизм:
-- ConcurrentQueue<Action<TaskCompletionSource<object>>> _queue
-- Подписка на EditorApplication.update
-- В update — dequeue и выполнение
-
-Методы:
-- Task<T> Enqueue<T>(Func<T> action)
-    Ставит действие в очередь, возвращает Task
-    Вызывающий поток (HTTP thread) ждёт результата через await
-
-- Task Enqueue(Action action)
-    Версия без возвращаемого значения
-
-Пример потока выполнения:
-    HTTP Thread                          Main Thread
-        │                                    │
-        ├─ Enqueue(() => {                   │
-        │    return SceneService.Add(...)     │
-        │  })                                │
-        │                                    │
-        ├─ await task ◄──────────────────── EditorApplication.update
-        │                                    ├─ dequeue action
-        │                                    ├─ execute
-        │                                    ├─ set task result
-        │                                    │
-        ├─ формируем response                │
-        ▼                                    ▼
-
-Обработка исключений:
-- Если action бросает исключение → оно пробрасывается через TaskCompletionSource
-- HTTP handler ловит его и возвращает 500 с деталями ошибки
-```
-
-### 3.4 RequestRouter.cs
-
-```
-Маршрутизатор HTTP-запросов к обработчикам.
-
-Регистрация маршрутов:
-- Dictionary<(string method, string pathPattern), Func<RequestContext, Task>> _routes
-
-Методы:
-- Register(string method, string pattern, Func<RequestContext, Task> handler)
-- Route(HttpListenerContext context) — находит обработчик, создаёт RequestContext
-
-Маршрутизация:
-- Точное совпадение: /api/compile/errors
-- С параметрами: /api/scene/objects/{id}
-    (параметры извлекаются в RequestContext.PathParams)
-
-Если маршрут не найден → 404 с описанием доступных endpoint-ов
-```
-
-### 3.5 RequestContext.cs
-
-```
-Обёртка над HttpListenerContext.
-
-Свойства:
-- string Method (GET/POST/PUT/DELETE)
-- string Path
-- Dictionary<string, string> PathParams
-- Dictionary<string, string> QueryParams
-
-Методы:
-- Task<T> ReadBodyAsync<T>() — десериализация JSON body
-- Task<string> ReadBodyRawAsync() — raw string body
-- void Respond(int statusCode, object body) — JSON ответ
-- void RespondOk(object data)
-- void RespondError(int code, string message, object details = null)
-```
-
-### 3.6 ResponseHelper.cs / ApiResponse.cs
-
-```
-Стандартный формат ответа:
-
-{
-    "success": true|false,
-    "data": { ... },           // при success=true
-    "error": {                 // при success=false
-        "code": "COMPILE_ERROR",
-        "message": "...",
-        "details": { ... }
-    },
-    "timestamp": "2025-01-15T12:00:00Z",
-    "duration_ms": 150
-}
-
-Коды ошибок (enum):
-- INVALID_REQUEST — неверные параметры
-- NOT_FOUND — объект/компонент/сцена не найдены
-- COMPILE_ERROR — ошибки компиляции
-- TYPE_NOT_FOUND — тип компонента не найден
-- FIELD_NOT_FOUND — поле не найдено в компоненте
-- SCENE_NOT_LOADED — сцена не загружена
-- INTERNAL_ERROR — необработанная ошибка
-- SERVER_BUSY — сервер занят (компиляция в процессе)
-```
-
----
-
-## 4. API Endpoints
-
-### 4.1 Здоровье и статус
-
-#### `GET /api/ping`
-
-Лёгкая проверка доступности сервера. Не использует Unity API и main thread — отвечает всегда, даже когда main thread заблокирован (компиляция, модальное окно). Используйте при зависании `/api/status`.
-
-**Response:**
-```json
-{
-    "success": true,
-    "data": {
-        "ok": true,
-        "uptime_seconds": 3600
-    }
-}
-```
-
-**curl:**
 ```bash
-curl http://localhost:7890/api/ping
-```
-
----
-
-#### `GET /api/status`
-
-Проверка работоспособности сервера.
-
-**Response:**
-```json
-{
-    "success": true,
-    "data": {
-        "server_version": "1.0.0",
-        "unity_version": "6000.3.0f1",
-        "project_name": "MyProject",
-        "project_path": "/Users/dev/MyProject",
-        "is_compiling": false,
-        "is_playing": false,
-        "active_scene": "Assets/Scenes/SampleScene.unity",
-        "loaded_scenes": ["Assets/Scenes/SampleScene.unity"],
-        "uptime_seconds": 3600
-    }
-}
-```
-
-**curl:**
-```bash
-curl http://localhost:7890/api/status
-```
-
----
-
-### 4.2 Управление ассетами
-
-#### `POST /api/assets/refresh`
-
-Принудительный вызов `AssetDatabase.Refresh()`.
-
-**Request body (опционально):**
-```json
-{
-    "import_options": "ForceUpdate"
-}
-```
-
-**Response:**
-```json
-{
-    "success": true,
-    "data": {
-        "refreshed": true,
-        "duration_ms": 1200
-    }
-}
-```
-
-**curl:**
-```bash
-curl -X POST http://localhost:7890/api/assets/refresh
-```
-
----
-
-#### `GET /api/assets/find`
-
-Поиск ассетов по фильтру.
-
-**Query params:**
-- `filter` — строка фильтра AssetDatabase (например `t:Script PlayerController`)
-- `path` — ограничение папки (например `Assets/Scripts`)
-
-**Response:**
-```json
-{
-    "success": true,
-    "data": {
-        "assets": [
-            {
-                "guid": "abc123...",
-                "path": "Assets/Scripts/PlayerController.cs",
-                "type": "MonoScript"
-            }
-        ],
-        "count": 1
-    }
-}
-```
-
-**curl:**
-```bash
-curl "http://localhost:7890/api/assets/find?filter=t:Script&path=Assets/Scripts"
-```
-
----
-
-#### `POST /api/assets/create-folder`
-
-Создание папки в проекте.
-
-**Request body:**
-```json
-{
-    "path": "Assets/Scripts/Player"
-}
-```
-
-**curl:**
-```bash
-curl -X POST http://localhost:7890/api/assets/create-folder \
+curl -X POST http://localhost:6400/uacf \
   -H "Content-Type: application/json" \
-  -d '{"path":"Assets/Scripts/Player"}'
-```
-
----
-
-#### `DELETE /api/assets/delete`
-
-Удаление ассета.
-
-**Request body:**
-```json
-{
-    "path": "Assets/Scripts/OldScript.cs"
-}
-```
-
----
-
-### 4.3 Компиляция
-
-#### `POST /api/compile/request`
-
-Инициирует компиляцию (вызывает `AssetDatabase.Refresh()` + ожидание завершения компиляции).
-
-**Request body (опционально):**
-```json
-{
-    "wait": true,
-    "timeout_seconds": 60
-}
-```
-
-**Поведение при `wait: true`:**
-1. Вызывает `AssetDatabase.Refresh()`
-2. Ожидает `EditorApplication.isCompiling == false`
-3. Собирает ошибки через `CompilationPipeline`
-4. Возвращает результат
-
-**Response (успех):**
-```json
-{
-    "success": true,
-    "data": {
-        "compiled": true,
-        "has_errors": false,
-        "error_count": 0,
-        "warning_count": 2,
-        "warnings": [
-            {
-                "message": "Variable 'x' is assigned but never used",
-                "file": "Assets/Scripts/Test.cs",
-                "line": 15,
-                "column": 9,
-                "severity": "warning",
-                "id": "CS0219"
-            }
-        ],
-        "duration_ms": 3500
-    }
-}
-```
-
-**Response (ошибки компиляции):**
-```json
-{
-    "success": true,
-    "data": {
-        "compiled": true,
-        "has_errors": true,
-        "error_count": 2,
-        "warning_count": 0,
-        "errors": [
-            {
-                "message": "The type or namespace name 'Rigidbody2D' could not be found",
-                "file": "Assets/Scripts/PlayerController.cs",
-                "line": 8,
-                "column": 12,
-                "severity": "error",
-                "id": "CS0246"
-            },
-            {
-                "message": "; expected",
-                "file": "Assets/Scripts/PlayerController.cs",
-                "line": 22,
-                "column": 1,
-                "severity": "error",
-                "id": "CS1002"
-            }
-        ],
-        "duration_ms": 2100
-    }
-}
-```
-
-**curl:**
-```bash
-curl -X POST http://localhost:7890/api/compile/request \
-  -H "Content-Type: application/json" \
-  -d '{"wait":true,"timeout_seconds":60}'
-```
-
----
-
-#### `GET /api/compile/status`
-
-Текущий статус компиляции (не инициирует новую).
-
-**Response:**
-```json
-{
-    "success": true,
-    "data": {
-        "is_compiling": false,
-        "last_compile_success": true,
-        "last_compile_time": "2025-01-15T12:00:00Z",
-        "last_error_count": 0,
-        "last_warning_count": 2
-    }
-}
-```
-
-**curl:**
-```bash
-curl http://localhost:7890/api/compile/status
-```
-
----
-
-#### `GET /api/compile/errors`
-
-Получить ошибки последней компиляции.
-
-**Query params:**
-- `severity` — фильтр: `error`, `warning`, `all` (default: `all`)
-- `file` — фильтр по файлу (например `Assets/Scripts/Player.cs`)
-
-**Response:**
-```json
-{
-    "success": true,
-    "data": {
-        "errors": [...],
-        "total_errors": 0,
-        "total_warnings": 2
-    }
-}
-```
-
-**curl:**
-```bash
-curl "http://localhost:7890/api/compile/errors?severity=error"
-```
-
----
-
-### 4.4 Управление сценами
-
-#### `GET /api/scene/list`
-
-Список загруженных сцен.
-
-**Response:**
-```json
-{
-    "success": true,
-    "data": {
-        "scenes": [
-            {
-                "name": "SampleScene",
-                "path": "Assets/Scenes/SampleScene.unity",
-                "is_loaded": true,
-                "is_dirty": false,
-                "is_active": true,
-                "root_count": 5,
-                "build_index": 0
-            }
-        ]
-    }
-}
-```
-
-**curl:**
-```bash
-curl http://localhost:7890/api/scene/list
-```
-
----
-
-#### `POST /api/scene/open`
-
-Открыть сцену.
-
-**Request body:**
-```json
-{
-    "path": "Assets/Scenes/GameScene.unity",
-    "mode": "Single"
-}
-```
-
-`mode`: `Single` | `Additive`
-
----
-
-#### `POST /api/scene/save`
-
-Сохранить текущую сцену.
-
-**Request body (опционально):**
-```json
-{
-    "path": "Assets/Scenes/SampleScene.unity"
-}
-```
-
-Если `path` не указан — сохраняет активную сцену.
-
----
-
-#### `POST /api/scene/new`
-
-Создать новую сцену.
-
-**Request body:**
-```json
-{
-    "path": "Assets/Scenes/NewLevel.unity",
-    "template": "default"
-}
-```
-
-`template`: `default` (камера + свет) | `empty`
-
----
-
-### 4.5 Управление GameObject-ами
-
-#### `GET /api/scene/hierarchy`
-
-Получить полную иерархию активной сцены.
-
-**Query params:**
-- `depth` — глубина вложенности (default: `-1`, все уровни)
-- `include_components` — включать список компонентов (default: `false`)
-- `scene` — путь к сцене (default: активная сцена)
-
-**Response:**
-```json
-{
-    "success": true,
-    "data": {
-        "scene": "SampleScene",
-        "objects": [
-            {
-                "instance_id": 12345,
-                "name": "Main Camera",
-                "active": true,
-                "tag": "MainCamera",
-                "layer": 0,
-                "layer_name": "Default",
-                "static": false,
-                "transform": {
-                    "local_position": {"x": 0, "y": 1, "z": -10},
-                    "local_rotation": {"x": 0, "y": 0, "z": 0, "w": 1},
-                    "local_scale": {"x": 1, "y": 1, "z": 1}
-                },
-                "components": ["Transform", "Camera", "AudioListener"],
-                "children": []
-            },
-            {
-                "instance_id": 12346,
-                "name": "Directional Light",
-                "active": true,
-                "tag": "Untagged",
-                "layer": 0,
-                "layer_name": "Default",
-                "static": false,
-                "transform": {
-                    "local_position": {"x": 0, "y": 3, "z": 0},
-                    "local_rotation": {"x": 0.408, "y": -0.234, "z": 0.064, "w": 0.878},
-                    "local_scale": {"x": 1, "y": 1, "z": 1}
-                },
-                "components": ["Transform", "Light"],
-                "children": []
-            }
-        ],
-        "total_count": 2
-    }
-}
-```
-
-**curl:**
-```bash
-curl "http://localhost:7890/api/scene/hierarchy?include_components=true&depth=3"
-```
-
----
-
-#### `POST /api/gameobject/create`
-
-Создать новый GameObject на сцене.
-
-**Request body:**
-```json
-{
-    "name": "Player",
-    "parent": null,
-    "tag": "Player",
-    "layer": "Default",
-    "static": false,
-    "active": true,
-    "transform": {
-        "position": {"x": 0, "y": 0, "z": 0},
-        "rotation": {"x": 0, "y": 0, "z": 0},
-        "scale": {"x": 1, "y": 1, "z": 1}
-    },
-    "components": [
-        {
-            "type": "Rigidbody",
-            "fields": {
-                "mass": 1.0,
-                "useGravity": true
-            }
-        },
-        {
-            "type": "BoxCollider",
-            "fields": {
-                "size": {"x": 1, "y": 2, "z": 1},
-                "center": {"x": 0, "y": 1, "z": 0}
-            }
-        },
-        {
-            "type": "PlayerController",
-            "fields": {
-                "moveSpeed": 5.0,
-                "jumpForce": 10.0
-            }
-        }
-    ]
-}
-```
-
-`parent` — может быть:
-- `null` — корень сцены
-- `instance_id` (число) — по Instance ID
-- `"name:Canvas/Panel"` — по пути в иерархии
-
-**Response:**
-```json
-{
-    "success": true,
-    "data": {
-        "instance_id": 13000,
-        "name": "Player",
-        "components_added": ["Transform", "Rigidbody", "BoxCollider", "PlayerController"],
-        "fields_set": 5,
-        "fields_failed": []
-    }
-}
-```
-
-**curl:**
-```bash
-curl -X POST http://localhost:7890/api/gameobject/create \
-  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer TOKEN" \
   -d '{
-    "name": "Player",
-    "components": [
-      {"type": "Rigidbody", "fields": {"mass": 1.0}},
-      {"type": "PlayerController", "fields": {"moveSpeed": 5.0}}
-    ]
-  }'
-```
-
----
-
-#### `GET /api/gameobject/find`
-
-Найти GameObject(ы) на сцене.
-
-**Query params:**
-- `name` — точное имя
-- `tag` — по тегу
-- `path` — путь в иерархии (например `Canvas/Panel/Button`)
-- `component` — имеющий компонент определённого типа
-- `instance_id` — по Instance ID
-
-**Response:**
-```json
-{
-    "success": true,
-    "data": {
-        "objects": [
-            {
-                "instance_id": 13000,
-                "name": "Player",
-                "path": "/Player",
-                "active_self": true,
-                "active_hierarchy": true,
-                "tag": "Player",
-                "layer_name": "Default",
-                "components": ["Transform", "Rigidbody", "BoxCollider", "PlayerController"]
-            }
-        ],
-        "count": 1
-    }
-}
-```
-
-**curl:**
-```bash
-curl "http://localhost:7890/api/gameobject/find?name=Player"
-curl "http://localhost:7890/api/gameobject/find?tag=Enemy"
-curl "http://localhost:7890/api/gameobject/find?component=Camera"
-```
-
----
-
-#### `PUT /api/gameobject/modify`
-
-Изменить свойства GameObject.
-
-**Request body:**
-```json
-{
-    "target": {"instance_id": 13000},
-    "set": {
-        "name": "PlayerCharacter",
-        "active": true,
-        "tag": "Player",
-        "layer": "Player",
-        "static": false,
-        "transform": {
-            "position": {"x": 5, "y": 0, "z": 3},
-            "rotation": {"x": 0, "y": 90, "z": 0},
-            "scale": {"x": 1, "y": 1, "z": 1}
-        }
-    }
-}
-```
-
-`target` — объект идентификации:
-```json
-{"instance_id": 12345}
-{"name": "Player"}
-{"path": "Canvas/Panel"}
-{"tag": "MainCamera"}
-```
-
----
-
-#### `DELETE /api/gameobject/destroy`
-
-Удалить GameObject.
-
-**Request body:**
-```json
-{
-    "target": {"instance_id": 13000},
-    "destroy_children": true
-}
-```
-
----
-
-#### `POST /api/gameobject/set-parent`
-
-Изменить родителя.
-
-**Request body:**
-```json
-{
-    "target": {"instance_id": 13000},
-    "parent": {"name": "Environment"},
-    "world_position_stays": true
-}
-```
-
-`parent: null` — переместить в корень сцены.
-
----
-
-#### `POST /api/gameobject/duplicate`
-
-Дублировать GameObject.
-
-**Request body:**
-```json
-{
-    "target": {"instance_id": 13000},
-    "new_name": "Player (2)",
-    "offset": {"x": 2, "y": 0, "z": 0}
-}
-```
-
----
-
-### 4.6 Управление компонентами
-
-#### `POST /api/component/add`
-
-Добавить компонент к GameObject.
-
-**Request body:**
-```json
-{
-    "target": {"instance_id": 13000},
-    "component_type": "CharacterController",
-    "fields": {
-        "height": 2.0,
-        "radius": 0.5,
-        "center": {"x": 0, "y": 1, "z": 0}
-    }
-}
-```
-
-`component_type` — поддерживаемые форматы:
-- `"Rigidbody"` — поиск в UnityEngine
-- `"UnityEngine.UI.Image"` — полное имя с namespace
-- `"PlayerController"` — поиск пользовательского скрипта
-- `"MyNamespace.PlayerController"` — полное имя пользовательского скрипта
-
----
-
-#### `GET /api/component/get`
-
-Получить все поля компонента.
-
-**Query params:**
-- `instance_id` — Instance ID GameObject
-- `component` — имя типа компонента
-- `index` — индекс компонента (если несколько одного типа, default: 0)
-
-**Response:**
-```json
-{
-    "success": true,
-    "data": {
-        "component_type": "PlayerController",
-        "game_object": "Player",
-        "instance_id": 13001,
-        "fields": {
-            "moveSpeed": {
-                "value": 5.0,
-                "type": "float",
-                "serialized": true
-            },
-            "jumpForce": {
-                "value": 10.0,
-                "type": "float",
-                "serialized": true
-            },
-            "groundCheck": {
-                "value": null,
-                "type": "Transform",
-                "serialized": true,
-                "is_object_reference": true
-            },
-            "isGrounded": {
-                "value": false,
-                "type": "bool",
-                "serialized": false
-            }
-        }
-    }
-}
-```
-
-**curl:**
-```bash
-curl "http://localhost:7890/api/component/get?instance_id=13000&component=PlayerController"
-```
-
----
-
-#### `PUT /api/component/set-fields`
-
-Установить значения полей компонента.
-
-**Request body:**
-```json
-{
-    "target": {"instance_id": 13000},
-    "component": "PlayerController",
-    "index": 0,
-    "fields": {
-        "moveSpeed": 7.5,
-        "jumpForce": 12.0,
-        "groundCheck": {"reference": {"name": "GroundCheck"}},
-        "playerName": "Hero",
-        "maxHealth": 100,
-        "spawnPoints": [
-            {"reference": {"name": "Spawn1"}},
-            {"reference": {"name": "Spawn2"}}
-        ]
-    }
-}
-```
-
-**Форматы значений полей:**
-
-```
-Примитивы:        "fieldName": 5.0
-Строки:           "fieldName": "hello"
-Bool:             "fieldName": true
-Vector2:          "fieldName": {"x": 1, "y": 2}
-Vector3:          "fieldName": {"x": 1, "y": 2, "z": 3}
-Color:            "fieldName": {"r": 1, "g": 0, "b": 0, "a": 1}
-Enum:             "fieldName": "Running"  (по имени)
-                  "fieldName": 2          (по индексу)
-
-Ссылки на объект: "fieldName": {"reference": {"instance_id": 12345}}
-                  "fieldName": {"reference": {"name": "Player"}}
-                  "fieldName": {"reference": {"path": "Canvas/Panel"}}
-
-Ссылки на ассет:  "fieldName": {"asset": "Assets/Materials/Red.mat"}
-                  "fieldName": {"asset": "Assets/Prefabs/Enemy.prefab"}
-
-Null ссылка:      "fieldName": null
-
-Массивы/списки:   "fieldName": [1, 2, 3]
-                  "fieldName": [{"reference": {"name": "A"}}, {"reference": {"name": "B"}}]
-```
-
-**Response:**
-```json
-{
-    "success": true,
-    "data": {
-        "fields_set": [
-            {"name": "moveSpeed", "value": 7.5, "status": "ok"},
-            {"name": "jumpForce", "value": 12.0, "status": "ok"},
-            {"name": "groundCheck", "value": "GroundCheck (Transform)", "status": "ok"}
-        ],
-        "fields_failed": [],
-        "total_set": 3,
-        "total_failed": 0
-    }
-}
-```
-
-**curl:**
-```bash
-curl -X PUT http://localhost:7890/api/component/set-fields \
-  -H "Content-Type: application/json" \
-  -d '{
-    "target": {"name": "Player"},
-    "component": "PlayerController",
-    "fields": {
-        "moveSpeed": 7.5,
-        "groundCheck": {"reference": {"name": "GroundCheck"}}
+    "action": "scene.hierarchy.get",
+    "params": {
+      "depth": 2,
+      "components": true
     }
   }'
 ```
 
----
+**Структура запроса:**
 
-#### `DELETE /api/component/remove`
-
-Удалить компонент.
-
-**Request body:**
 ```json
 {
-    "target": {"instance_id": 13000},
-    "component": "BoxCollider",
-    "index": 0
+  "action": "string — точечная нотация действия",
+  "params": { /* параметры действия, опционально */ }
 }
 ```
 
 ---
 
-#### `GET /api/component/list-types`
+## Единый формат ответов
 
-Получить список доступных типов компонентов.
+**Успех:**
 
-**Query params:**
-- `filter` — фильтр по имени (например `"Collider"`)
-- `category` — `unity` | `custom` | `all` (default: `all`)
-
-**Response:**
 ```json
 {
-    "success": true,
-    "data": {
-        "types": [
-            {"name": "BoxCollider", "full_name": "UnityEngine.BoxCollider", "category": "unity"},
-            {"name": "SphereCollider", "full_name": "UnityEngine.SphereCollider", "category": "unity"},
-            {"name": "PlayerController", "full_name": "PlayerController", "category": "custom"}
-        ]
-    }
+  "ok": true,
+  "data": { /* результат */ },
+  "warnings": ["NavMesh не запечён"],
+  "duration": 0.034
 }
 ```
 
----
+**Ошибка:**
 
-### 4.7 Управление префабами
-
-#### `POST /api/prefab/create`
-
-Создать префаб из GameObject на сцене.
-
-**Request body:**
 ```json
 {
-    "source": {"instance_id": 13000},
-    "path": "Assets/Prefabs/Player.prefab",
-    "keep_connection": true
+  "ok": false,
+  "error": {
+    "code": "OBJECT_NOT_FOUND",
+    "message": "GameObject 'Player' not found in active scene",
+    "suggestion": "Available objects: Main Camera, Directional Light, Cube"
+  },
+  "duration": 0.002
 }
+```
+
+**Правила:**
+- `ok` — всегда присутствует
+- `data` — всегда присутствует при `ok: true`, может быть `null` для void-операций
+- `warnings` — массив, присутствует только если есть предупреждения
+- `error` — присутствует только при `ok: false`
+- `suggestion` — подсказка агенту как исправить ситуацию (где возможно)
+- `duration` — секунды выполнения
+
+---
+
+## Модуль 1: Ядро
+
+### 1.1 Конфигурация
+
+```json
+// ProjectSettings/UACF/config.json
+{
+  "port": 6400,
+  "host": "127.0.0.1",
+  "token": "auto-generated-on-first-run",
+  "allowExecute": true,
+  "logRequests": true,
+  "logFile": "Logs/UACF/session.log"
+}
+```
+
+При первом запуске токен выводится в Unity Console:
+```
+[UACF] Server started on http://127.0.0.1:6400
+[UACF] Auth token: a7f3b2c1d4e5...
+```
+
+### 1.2 API Discovery
+
+```json
+// Список всех доступных actions
+{ "action": "api.list" }
+// → {
+//     "ok": true,
+//     "data": {
+//       "version": "2.0.0",
+//       "actions": [
+//         {
+//           "action": "scene.hierarchy.get",
+//           "description": "Get the full hierarchy of the active scene",
+//           "params": [
+//             { "name": "depth", "type": "int", "required": false, "description": "Max tree depth" },
+//             { "name": "components", "type": "bool", "required": false, "description": "Include component names" }
+//           ],
+//           "example": { "action": "scene.hierarchy.get", "params": { "depth": 2, "components": true } }
+//         },
+//         ...
+//       ]
+//     }
+//   }
+
+// Справка по конкретному action
+{ "action": "api.help", "params": { "action": "scene.object.create" } }
+
+// Готовый system prompt для агента
+{ "action": "api.prompt", "params": { "format": "compact" } }
+// → { "ok": true, "data": { "prompt": "You have access to Unity Editor through UACF..." } }
+
+// Формат "full" — со всеми примерами
+{ "action": "api.prompt", "params": { "format": "full" } }
+```
+
+### 1.3 Лог запросов
+
+```json
+{ "action": "api.logs", "params": { "last": 20 } }
+// → {
+//     "ok": true,
+//     "data": {
+//       "entries": [
+//         { "timestamp": 1705312800, "action": "scene.object.create", "ok": true, "duration": 0.012 },
+//         { "timestamp": 1705312801, "action": "component.add", "ok": false, "error": "INVALID_TYPE" },
+//         ...
+//       ]
+//     }
+//   }
 ```
 
 ---
 
-#### `POST /api/prefab/instantiate`
+## Модуль 2: Execute
 
-Инстанцировать префаб на сцену.
+**Самый важный модуль. Делает фреймворк безграничным.**
 
-**Request body:**
+### 2.1 Выполнение C# кода
+
+```json
+// Простое выражение
+{
+  "action": "execute",
+  "params": {
+    "code": "GameObject.FindObjectsOfType<Light>().Length"
+  }
+}
+// → { "ok": true, "data": { "result": 3 } }
+
+// Многострочный скрипт
+{
+  "action": "execute",
+  "params": {
+    "code": "var go = new GameObject(\"Test\"); go.AddComponent<Rigidbody>(); go.transform.position = new Vector3(1,2,3);",
+    "return": "go.GetInstanceID()"
+  }
+}
+// → { "ok": true, "data": { "result": 14520 } }
+
+// С using-ами
+{
+  "action": "execute",
+  "params": {
+    "code": "EditorSceneManager.SaveOpenScenes();",
+    "usings": ["UnityEditor", "UnityEditor.SceneManagement"]
+  }
+}
+
+// С таймаутом
+{
+  "action": "execute",
+  "params": {
+    "code": "SomeLongOperation();",
+    "timeout": 10000
+  }
+}
+```
+
+### 2.2 Проверка компиляции без выполнения
+
 ```json
 {
-    "prefab_path": "Assets/Prefabs/Enemy.prefab",
-    "name": "Enemy_01",
-    "parent": null,
-    "position": {"x": 10, "y": 0, "z": 5},
-    "rotation": {"x": 0, "y": 180, "z": 0},
-    "component_overrides": {
-        "EnemyAI": {
-            "patrolSpeed": 3.0,
-            "detectionRange": 15.0
-        }
-    }
+  "action": "execute.validate",
+  "params": {
+    "code": "var x = new GameObjec();"
+  }
 }
+// → { "ok": false, "error": { "code": "COMPILATION_ERROR", "message": "The type 'GameObjec' could not be found..." } }
 ```
 
----
+### 2.3 Выполнение статического метода из проекта
 
-#### `PUT /api/prefab/modify`
-
-Модифицировать содержимое префаба (открывает prefab stage, вносит изменения, сохраняет).
-
-**Request body:**
 ```json
 {
-    "prefab_path": "Assets/Prefabs/Player.prefab",
-    "operations": [
-        {
-            "action": "add_component",
-            "target_path": "",
-            "component": "AudioSource",
-            "fields": {"playOnAwake": false}
-        },
-        {
-            "action": "add_child",
-            "name": "GroundCheck",
-            "transform": {
-                "position": {"x": 0, "y": -1, "z": 0}
-            }
-        },
-        {
-            "action": "set_fields",
-            "target_path": "",
-            "component": "PlayerController",
-            "fields": {"moveSpeed": 8.0}
-        }
-    ]
+  "action": "execute.method",
+  "params": {
+    "type": "LevelBuilder",
+    "method": "BuildLevel",
+    "args": ["level1", "hard"]
+  }
 }
 ```
 
 ---
 
-#### `POST /api/prefab/apply-overrides`
+## Модуль 3: Сцена
 
-Применить override-ы экземпляра обратно в префаб.
+### 3.1 Иерархия
 
-**Request body:**
+```json
+{ "action": "scene.hierarchy.get" }
+
+{ "action": "scene.hierarchy.get", "params": { 
+  "depth": 2, 
+  "components": true, 
+  "filter": "Enemy",
+  "tag": "Enemy",
+  "layer": "Enemies"
+}}
+```
+
+**Ответ:**
+
 ```json
 {
-    "instance": {"instance_id": 13000},
-    "apply_all": true
-}
-```
-
----
-
-### 4.8 Работа с файлами проекта
-
-#### `POST /api/file/write`
-
-Записать файл в проект (альтернатива прямой записи агентом, с автоматическим Refresh).
-
-**Request body:**
-```json
-{
-    "path": "Assets/Scripts/NewScript.cs",
-    "content": "using UnityEngine;\n\npublic class NewScript : MonoBehaviour\n{\n    public float speed = 5f;\n}",
-    "auto_refresh": true,
-    "wait_compile": true
-}
-```
-
-**Response (если wait_compile=true):**
-```json
-{
-    "success": true,
-    "data": {
-        "file_written": true,
-        "path": "Assets/Scripts/NewScript.cs",
-        "compiled": true,
-        "has_errors": false,
-        "errors": [],
-        "warnings": []
-    }
-}
-```
-
-**curl:**
-```bash
-curl -X POST http://localhost:7890/api/file/write \
-  -H "Content-Type: application/json" \
-  -d '{
-    "path": "Assets/Scripts/PlayerController.cs",
-    "content": "using UnityEngine;\n\npublic class PlayerController : MonoBehaviour\n{\n    public float moveSpeed = 5f;\n    public float jumpForce = 10f;\n    public Transform groundCheck;\n\n    void Update()\n    {\n        float h = Input.GetAxis(\"Horizontal\");\n        transform.Translate(Vector3.right * h * moveSpeed * Time.deltaTime);\n    }\n}",
-    "auto_refresh": true,
-    "wait_compile": true
-  }'
-```
-
----
-
-#### `GET /api/file/read`
-
-Прочитать файл из проекта.
-
-**Query params:**
-- `path` — путь к файлу (например `Assets/Scripts/Player.cs`)
-
-**Response:**
-```json
-{
-    "success": true,
-    "data": {
-        "path": "Assets/Scripts/Player.cs",
-        "content": "using UnityEngine;...",
-        "exists": true,
-        "size_bytes": 1234
-    }
-}
-```
-
----
-
-### 4.9 Управление проектом
-
-#### `GET /api/project/settings`
-
-Получить настройки проекта.
-
-**Query params:**
-- `category` — `player` | `physics` | `input` | `tags` | `layers` | `quality`
-
-**Response (tags/layers):**
-```json
-{
-    "success": true,
-    "data": {
-        "tags": ["Untagged", "Respawn", "Finish", "EditorOnly", "MainCamera", "Player", "GameController"],
-        "sorting_layers": ["Default"],
-        "layers": {
-            "0": "Default",
-            "1": "TransparentFX",
-            "2": "Ignore Raycast",
-            "3": "",
-            "4": "Water",
-            "5": "UI",
-            "8": "",
-            "...": "..."
-        }
-    }
-}
-```
-
----
-
-#### `POST /api/project/add-tag`
-
-Добавить тег.
-
-**Request body:**
-```json
-{
-    "tag": "Enemy"
-}
-```
-
----
-
-#### `POST /api/project/set-layer`
-
-Установить имя пользовательского слоя.
-
-**Request body:**
-```json
-{
-    "layer_index": 8,
-    "name": "Player"
-}
-```
-
----
-
-### 4.10 Управление EditorPlayMode
-
-#### `POST /api/editor/play`
-
-Запустить Play Mode.
-
-**Response:**
-```json
-{
-    "success": true,
-    "data": {
-        "is_playing": true
-    }
-}
-```
-
----
-
-#### `POST /api/editor/stop`
-
-Остановить Play Mode.
-
----
-
-#### `POST /api/editor/pause`
-
-Приостановить / возобновить.
-
----
-
-### 4.11 Пакетные операции
-
-#### `POST /api/batch/execute`
-
-Выполнить несколько операций атомарно.
-
-**Request body:**
-```json
-{
-    "operations": [
-        {
-            "id": "op1",
-            "endpoint": "POST /api/gameobject/create",
-            "body": {
-                "name": "Player",
-                "tag": "Player"
-            }
-        },
-        {
-            "id": "op2",
-            "endpoint": "POST /api/component/add",
-            "body": {
-                "target": {"name": "Player"},
-                "component_type": "Rigidbody",
-                "fields": {"mass": 1.0}
-            }
-        },
-        {
-            "id": "op3",
-            "endpoint": "POST /api/component/add",
-            "body": {
-                "target": {"name": "Player"},
-                "component_type": "PlayerController",
-                "fields": {
-                    "moveSpeed": 5.0
-                }
-            }
-        }
-    ],
-    "stop_on_error": true
-}
-```
-
-**Response:**
-```json
-{
-    "success": true,
-    "data": {
-        "results": [
-            {"id": "op1", "success": true, "data": {"instance_id": 13000}},
-            {"id": "op2", "success": true, "data": {"component_added": "Rigidbody"}},
-            {"id": "op3", "success": true, "data": {"component_added": "PlayerController"}}
-        ],
-        "total": 3,
-        "succeeded": 3,
-        "failed": 0
-    }
-}
-```
-
-**curl:**
-```bash
-curl -X POST http://localhost:7890/api/batch/execute \
-  -H "Content-Type: application/json" \
-  -d @batch_setup.json
-```
-
----
-
-## 5. Сервисы (детальная спецификация)
-
-### 5.1 CompilationService
-
-```
-Ответственность:
-- Отслеживание состояния компиляции
-- Сбор ошибок и предупреждений
-- Ожидание завершения компиляции
-
-Подписки:
-- CompilationPipeline.compilationStarted
-- CompilationPipeline.compilationFinished
-- CompilationPipeline.assemblyCompilationFinished
-
-Хранимое состояние:
-- List<CompilerMessage> _lastErrors
-- List<CompilerMessage> _lastWarnings
-- bool _isCompiling
-- DateTime _lastCompileTime
-- bool _lastCompileSuccess
-
-Методы:
-- Task<CompileResult> RequestCompilationAsync(int timeoutSeconds)
-    1. AssetDatabase.Refresh()
-    2. Ожидание compilationFinished через TaskCompletionSource
-    3. Сбор сообщений из CompilationPipeline.GetSystemAssemblyPaths
-       и фильтрация через CompilerMessage
-
-- CompileResult GetLastResult()
-- bool IsCompiling()
-```
-
-### 5.2 TypeResolverService
-
-```
-Ответственность:
-- Нахождение System.Type по строковому имени компонента
-
-Алгоритм поиска (по приоритету):
-1. Точное совпадение: Type.GetType(fullName)
-2. Поиск во всех загруженных assemblies:
-   - AppDomain.CurrentDomain.GetAssemblies()
-   - Для каждой assembly ищем тип по имени
-3. Поиск с подстановкой namespace:
-   - "Rigidbody" → ищем "UnityEngine.Rigidbody"
-   - Перебор стандартных namespace-ов: UnityEngine, UnityEngine.UI,
-     UnityEngine.Rendering, UnityEngine.EventSystems и т.д.
-4. Если тип наследует MonoBehaviour — ищем через MonoScript:
-   - AssetDatabase.FindAssets("t:MonoScript {name}")
-   - MonoScript.GetClass()
-
-Кэширование:
-- Dictionary<string, Type> _typeCache
-- Инвалидация кэша при recompile (подписка на compilationFinished)
-```
-
-### 5.3 ComponentService
-
-```
-Ответственность:
-- Добавление компонентов к GameObject
-- Чтение/запись полей компонентов через SerializedObject/SerializedProperty
-
-Установка полей через SerializedObject:
-1. new SerializedObject(component)
-2. FindProperty(fieldName)
-3. В зависимости от propertyType:
-   - Integer → intValue
-   - Float → floatValue
-   - String → stringValue
-   - Boolean → boolValue
-   - Vector2/3/4 → vector2/3/4Value
-   - Color → colorValue
-   - ObjectReference → objectReferenceValue
-   - Enum → enumValueIndex или enumValueFlag
-   - ArraySize → arraySize + GetArrayElementAtIndex
-4. serializedObject.ApplyModifiedProperties()
-
-Почему SerializedObject а не Reflection:
-- Работает с [SerializeField] private полями
-- Автоматически помечает сцену как dirty
-- Поддерживает Undo
-- Корректно работает с prefab override-ами
-
-Разрешение ссылок:
-- {"reference": {"instance_id": N}} → EditorUtility.InstanceIDToObject(N)
-- {"reference": {"name": "X"}} → GameObject.Find("X"), затем GetComponent если нужен тип
-- {"reference": {"path": "A/B/C"}} → поиск по иерархии
-- {"asset": "Assets/..."} → AssetDatabase.LoadAssetAtPath(path, type)
-```
-
-### 5.4 GameObjectService
-
-```
-Ответственность:
-- Создание, поиск, модификация, удаление GameObject
-- Работа с иерархией
-
-Поиск (приоритет):
-- По instance_id: EditorUtility.InstanceIDToObject()
-- По name: GameObject.Find() + перебор сцены если несколько
-- По path: рекурсивный поиск через Transform.Find()
-- По tag: GameObject.FindGameObjectsWithTag()
-- По component: Object.FindObjectsByType<T>()
-
-Создание:
-- ObjectFactory.CreateGameObject(name) — поддерживает Undo
-- Установка parent через transform.SetParent()
-- Установка tag, layer, static flags
-- Вызов ComponentService для добавления компонентов
-
-Сериализация иерархии:
-- Рекурсивный обход всех root объектов сцены
-- Scene.GetRootGameObjects()
-- Для каждого — transform.childCount, GetChild(i)
-- Ограничение глубины для предотвращения огромных ответов
-```
-
-### 5.5 SceneService
-
-```
-Ответственность:
-- Открытие, закрытие, создание, сохранение сцен
-
-Методы:
-- OpenScene(path, mode):
-    EditorSceneManager.OpenScene(path, (OpenSceneMode)mode)
-
-- SaveScene(path):
-    если path == null → EditorSceneManager.SaveOpenScenes()
-    иначе → EditorSceneManager.SaveScene(scene, path)
-
-- NewScene(path, template):
-    EditorSceneManager.NewScene(NewSceneSetup.DefaultGameObjects / EmptyScene)
-    EditorSceneManager.SaveScene(scene, path)
-
-- GetLoadedScenes():
-    перебор SceneManager.sceneCount, SceneManager.GetSceneAt(i)
-```
-
-### 5.6 PrefabService
-
-```
-Ответственность:
-- Создание, инстанцирование, модификация префабов
-
-Создание:
-- PrefabUtility.SaveAsPrefabAsset(gameObject, path)
-- PrefabUtility.SaveAsPrefabAssetAndConnect (если keep_connection)
-
-Инстанцирование:
-- AssetDatabase.LoadAssetAtPath<GameObject>(path)
-- PrefabUtility.InstantiatePrefab(prefab) as GameObject
-- Установка position/rotation
-- Применение component_overrides через ComponentService
-
-Модификация содержимого:
-- var prefabRoot = PrefabUtility.LoadPrefabContents(path)
-- Выполнение операций (add_component, add_child, set_fields)
-- PrefabUtility.SaveAsPrefabAsset(prefabRoot, path)
-- PrefabUtility.UnloadPrefabContents(prefabRoot)
-```
-
----
-
-## 6. Настройки (UACFSettings)
-
-```csharp
-// ScriptableSingleton<UACFSettings> — сохраняется в ProjectSettings/
-class UACFSettings : ScriptableSingleton<UACFSettings>
-{
-    int port = 7890;
-    bool autoStart = true;
-    bool logRequests = true;
-    bool logResponses = false;
-    int requestTimeoutSeconds = 30;
-    int compileTimeoutSeconds = 120;
-    string[] allowedOrigins = {"*"};
-    bool enableBatchEndpoint = true;
-    LogLevel logLevel = LogLevel.Info; // None, Error, Warning, Info, Debug
-}
-```
-
-Настройки доступны через:
-- `Edit > Project Settings > UACF` (SettingsProvider)
-- `GET /api/settings` / `PUT /api/settings`
-
----
-
-## 7. Логирование
-
-```
-Все запросы логируются в Unity Console:
-
-[UACF] POST /api/gameobject/create → 200 (45ms)
-[UACF] GET /api/compile/errors → 200 (3ms)
-[UACF] POST /api/component/add → 500 TYPE_NOT_FOUND: "PlayerControllerr" (2ms)
-
-Уровни:
-- Debug: тело запроса/ответа
-- Info: метод, путь, статус, время
-- Warning: медленные запросы (>5s)
-- Error: ошибки обработки
-
-Логирование через кастомный класс UACFLogger, НЕ Debug.Log напрямую
-(чтобы можно было отключать и фильтровать)
-```
-
----
-
-## 8. Обработка ошибок и граничные случаи
-
-### 8.1 Domain Reload
-
-```
-При перекомпиляции Unity делает domain reload:
-- Все статические поля сбрасываются
-- HttpListener уничтожается
-- Потоки останавливаются
-
-Решение:
-1. AssemblyReloadEvents.beforeAssemblyReload → Stop server gracefully
-2. AssemblyReloadEvents.afterAssemblyReload → Restart server
-3. Port и state сохраняются в SessionState (переживает domain reload)
-```
-
-### 8.2 Concurrent Requests
-
-```
-- HttpListener обрабатывает запросы в ThreadPool
-- MainThreadDispatcher сериализует Unity API вызовы
-- Два запроса, пришедших одновременно, выполнятся последовательно в main thread
-- HTTP-ответ отправляется только после завершения действия в main thread
-```
-
-### 8.3 Компиляция во время запроса
-
-```
-Если во время обработки запроса начинается компиляция:
-- Запросы к компиляции (/api/compile/*) — продолжают работу
-- Запросы к сцене/объектам — возвращают 503 SERVER_BUSY
-  с заголовком Retry-After: 5
-```
-
-### 8.4 Play Mode
-
-```
-В Play Mode некоторые операции невозможны:
-- Создание/удаление объектов на сцене
-- Модификация префабов
-- Сохранение сцены
-
-Если запрос приходит в Play Mode:
-- /api/editor/stop — работает
-- Операции модификации → 409 CONFLICT с сообщением "Exit Play Mode first"
-- Операции чтения (hierarchy, find, status) — работают
-```
-
-### 8.5 Несуществующие типы
-
-```
-Если агент указывает тип компонента, которого нет:
-- Ответ 422 с TYPE_NOT_FOUND
-- В details — список похожих типов (Levenshtein distance ≤ 3):
-
-{
-    "error": {
-        "code": "TYPE_NOT_FOUND",
-        "message": "Type 'PlayerControllr' not found",
-        "details": {
-            "suggestions": ["PlayerController", "CharacterController"]
-        }
-    }
-}
-```
-
----
-
-## 9. Безопасность
-
-```
-- Сервер слушает ТОЛЬКО localhost (127.0.0.1)
-- Никакого внешнего доступа по умолчанию
-- Опциональный API key (header X-UACF-Key)
-- Все операции логируются
-- Undo поддержка для всех модификаций
-  (Undo.RegisterCreatedObjectUndo, Undo.RecordObject, etc.)
-```
-
----
-
-## 10. Полный пример рабочего цикла агента
-
-### Сценарий: создать 2D платформер-персонаж
-
-```bash
-# 1. Проверить статус сервера
-curl http://localhost:7890/api/status
-
-# 2. Агент создаёт файл скрипта напрямую через файловую систему
-# (Cursor/Claude Code пишут файл Assets/Scripts/PlayerController2D.cs)
-
-# 3. Запросить компиляцию и дождаться результата
-curl -X POST http://localhost:7890/api/compile/request \
-  -H "Content-Type: application/json" \
-  -d '{"wait":true,"timeout_seconds":60}'
-
-# 4. Если ошибки — агент исправляет файл и повторяет шаг 3
-
-# 5. Создать GameObject с компонентами (батч)
-curl -X POST http://localhost:7890/api/batch/execute \
-  -H "Content-Type: application/json" \
-  -d '{
-    "operations": [
+  "ok": true,
+  "data": {
+    "sceneName": "SampleScene",
+    "scenePath": "Assets/Scenes/SampleScene.unity",
+    "isDirty": true,
+    "rootObjects": [
       {
-        "id": "create_player",
-        "endpoint": "POST /api/gameobject/create",
-        "body": {
-          "name": "Player",
-          "tag": "Player",
-          "transform": {"position": {"x":0,"y":2,"z":0}},
-          "components": [
-            {"type": "SpriteRenderer", "fields": {}},
-            {"type": "Rigidbody2D", "fields": {"gravityScale": 2.0, "freezeRotation": true}},
-            {"type": "BoxCollider2D", "fields": {"size": {"x":1,"y":1}}},
-            {"type": "PlayerController2D", "fields": {"moveSpeed": 7.0, "jumpForce": 12.0}}
-          ]
-        }
+        "name": "Main Camera",
+        "instanceId": 100,
+        "active": true,
+        "tag": "MainCamera",
+        "layer": "Default",
+        "components": ["Transform", "Camera", "AudioListener"],
+        "children": []
       },
       {
-        "id": "create_ground_check",
-        "endpoint": "POST /api/gameobject/create",
-        "body": {
-          "name": "GroundCheck",
-          "parent": {"name": "Player"},
-          "transform": {"position": {"x":0,"y":-0.5,"z":0}}
-        }
+        "name": "Player",
+        "instanceId": 102,
+        "active": true,
+        "tag": "Player",
+        "components": ["Transform", "CharacterController", "PlayerMovement"],
+        "children": [
+          {
+            "name": "Model",
+            "instanceId": 103,
+            "components": ["Transform", "MeshRenderer", "MeshFilter"],
+            "children": []
+          }
+        ]
       }
-    ],
-    "stop_on_error": true
-  }'
+    ]
+  }
+}
+```
 
-# 6. Назначить ссылку groundCheck
-curl -X PUT http://localhost:7890/api/component/set-fields \
-  -H "Content-Type: application/json" \
-  -d '{
-    "target": {"name": "Player"},
-    "component": "PlayerController2D",
-    "fields": {
-      "groundCheck": {"reference": {"name": "GroundCheck"}}
-    }
-  }'
+### 3.2 Управление сценами
 
-# 7. Проверить результат
-curl "http://localhost:7890/api/scene/hierarchy?include_components=true"
+```json
+// Открыть
+{ "action": "scene.open", "params": { "path": "Assets/Scenes/Level1.unity", "mode": "single" } }
+// mode: "single" | "additive"
 
-# 8. Сохранить сцену
-curl -X POST http://localhost:7890/api/scene/save
+// Создать новую
+{ "action": "scene.new", "params": { "setup": "empty" } }
+// setup: "empty" | "default"
 
-# 9. Человек нажимает Play (или агент сам)
-curl -X POST http://localhost:7890/api/editor/play
+// Сохранить
+{ "action": "scene.save" }
+{ "action": "scene.save", "params": { "path": "Assets/Scenes/Level2.unity" } }
+
+// Список всех сцен в проекте
+{ "action": "scene.list" }
+
+// Build Settings
+{ "action": "scene.buildSettings.get" }
+{ "action": "scene.buildSettings.add", "params": { "path": "Assets/Scenes/Level1.unity" } }
+{ "action": "scene.buildSettings.remove", "params": { "path": "Assets/Scenes/Level1.unity" } }
+```
+
+### 3.3 GameObject CRUD
+
+```json
+// Создать
+{ "action": "scene.object.create", "params": {
+  "name": "Enemy",
+  "parent": "EnemyContainer",
+  "position": [10, 0, 5],
+  "rotation": [0, 90, 0],
+  "scale": [1, 1, 1],
+  "tag": "Enemy",
+  "layer": "Enemies",
+  "static": false,
+  "components": [
+    { "type": "Rigidbody", "properties": { "mass": 2.0, "useGravity": true } },
+    { "type": "BoxCollider", "properties": { "size": [1, 2, 1] } },
+    { "type": "EnemyAI" }
+  ]
+}}
+// parent, position, rotation, scale, tag, layer, static, components — всё опционально
+
+// Найти
+{ "action": "scene.object.find", "params": { "name": "Player" } }
+{ "action": "scene.object.find", "params": { "instanceId": 14520 } }
+{ "action": "scene.object.find", "params": { "tag": "Enemy" } }
+{ "action": "scene.object.find", "params": { "component": "Camera" } }
+{ "action": "scene.object.find", "params": { "path": "Player/Model" } }
+// → Всегда возвращает массив объектов
+
+// Подробная информация (все компоненты со всеми свойствами)
+{ "action": "scene.object.details", "params": { "name": "Player" } }
+
+// Изменить
+{ "action": "scene.object.set", "params": {
+  "target": "Player",
+  "name": "MainPlayer",
+  "parent": "Characters",
+  "position": [0, 5, 0],
+  "active": false,
+  "tag": "Untagged"
+}}
+// target — обязательно (name или instanceId), остальное — что нужно изменить
+
+// Удалить
+{ "action": "scene.object.destroy", "params": { "name": "Enemy" } }
+{ "action": "scene.object.destroy", "params": { "tag": "Enemy" } }
+
+// Дублировать
+{ "action": "scene.object.duplicate", "params": { 
+  "target": "Enemy", 
+  "newName": "Enemy_Copy", 
+  "count": 5 
+}}
+
+// Создать примитив
+{ "action": "scene.object.createPrimitive", "params": {
+  "type": "Cube",
+  "name": "Wall",
+  "position": [0, 1, 5],
+  "scale": [10, 2, 0.5]
+}}
+// type: "Cube" | "Sphere" | "Capsule" | "Cylinder" | "Plane" | "Quad"
+```
+
+### 3.4 Валидация сцены
+
+```json
+{ "action": "scene.validate" }
+// → {
+//     "ok": true,
+//     "data": {
+//       "issues": [
+//         { "severity": "error", "message": "Missing script on 'Enemy_03'", "object": "Enemy_03" },
+//         { "severity": "warning", "message": "Light has no shadows", "object": "Spot Light" },
+//         { "severity": "info", "message": "3 objects have negative scale" }
+//       ]
+//     }
+//   }
 ```
 
 ---
 
-## 11. Требования к реализации
+## Модуль 4: Компоненты
 
-### 11.1 Зависимости
-- Unity 6.3+ (6000.3.x)
-- .NET Standard 2.1 / .NET Framework (Unity default)
-- Нет внешних NuGet пакетов
-- Только `UnityEditor`, `UnityEngine` API
+### 4.1 CRUD
 
-### 11.2 JSON сериализация
-- `JsonUtility` для простых Unity-типов (Vector3, Color)
-- Встроенный минимальный JSON сериализатор/десериализатор для API моделей
-- **Не** использовать Newtonsoft.Json (чтобы не тянуть зависимость)
-- Альтернатива: использовать `Unity.Plastic.Newtonsoft.Json` (встроен в Unity 6)
+```json
+// Список компонентов объекта
+{ "action": "component.list", "params": { "object": "Player" } }
+// → { "ok": true, "data": { "components": ["Transform", "CharacterController", "PlayerMovement"] } }
 
-### 11.3 Тестирование
-- EditMode тесты для каждого Service
-- Интеграционные тесты: запуск сервера → curl → проверка состояния сцены
-- Тесты на edge cases: несуществующие объекты, дублирующиеся имена, domain reload
+// Подробности компонента (все свойства)
+{ "action": "component.get", "params": { 
+  "object": "Player", 
+  "component": "CharacterController" 
+}}
+// → { "ok": true, "data": { 
+//     "type": "CharacterController",
+//     "enabled": true,
+//     "properties": {
+//       "slopeLimit": 45.0,
+//       "stepOffset": 0.3,
+//       "skinWidth": 0.08,
+//       "center": [0, 1, 0],
+//       "radius": 0.5,
+//       "height": 2.0
+//     }
+//   }}
 
-### 11.4 Производительность
-- Ответ на простые GET запросы: < 50ms
-- Создание GameObject: < 100ms
-- Компиляция: зависит от проекта (таймаут настраивается)
-- Иерархия сцены: < 500ms для 1000 объектов
+// Добавить
+{ "action": "component.add", "params": {
+  "object": "Player",
+  "type": "Rigidbody",
+  "properties": {
+    "mass": 5.0,
+    "drag": 0.1,
+    "useGravity": true,
+    "isKinematic": false
+  }
+}}
+
+// Изменить свойства
+{ "action": "component.set", "params": {
+  "object": "Player",
+  "component": "Rigidbody",
+  "properties": {
+    "mass": 10.0,
+    "useGravity": false
+  }
+}}
+
+// Удалить
+{ "action": "component.remove", "params": { 
+  "object": "Player", 
+  "component": "Rigidbody" 
+}}
+
+// Включить/выключить
+{ "action": "component.setEnabled", "params": { 
+  "object": "Player", 
+  "component": "MeshRenderer", 
+  "enabled": false 
+}}
+```
+
+### 4.2 Serialized Properties (глубокий доступ)
+
+```json
+// Получить все serialized свойства (работает с кастомными скриптами)
+{ "action": "component.serialized.get", "params": {
+  "object": "Player",
+  "component": "PlayerMovement"
+}}
+// → {
+//     "ok": true,
+//     "data": {
+//       "properties": [
+//         { "name": "speed", "type": "float", "value": 5.0 },
+//         { "name": "jumpHeight", "type": "float", "value": 2.0 },
+//         { "name": "groundLayer", "type": "LayerMask", "value": 256 },
+//         { "name": "weaponPrefab", "type": "ObjectReference", 
+//           "value": { "guid": "abc123...", "name": "Sword.prefab" } }
+//       ]
+//     }
+//   }
+
+// Установить через serialized properties
+{ "action": "component.serialized.set", "params": {
+  "object": "Player",
+  "component": "PlayerMovement",
+  "properties": {
+    "speed": 10.0,
+    "jumpHeight": 3.5,
+    "weaponPrefab": { "guid": "abc123..." }
+  }
+}}
+```
 
 ---
 
-## 12. Этапы реализации
+## Модуль 5: Ассеты
 
-### Этап 1: Ядро (Core)
-- [ ] UACFServer + HttpListener
-- [ ] MainThreadDispatcher
-- [ ] RequestRouter + RequestContext
-- [ ] ResponseHelper + ApiResponse
-- [ ] UACFBootstrap
-- [ ] GET /api/status
+### 5.1 Поиск
 
-### Этап 2: Компиляция
-- [ ] CompilationService
-- [ ] POST /api/compile/request
-- [ ] GET /api/compile/status
-- [ ] GET /api/compile/errors
-- [ ] POST /api/assets/refresh
+```json
+{ "action": "asset.find", "params": { "type": "prefab" } }
+{ "action": "asset.find", "params": { "type": "material", "name": "*Metal*" } }
+{ "action": "asset.find", "params": { "type": "script", "folder": "Assets/Scripts" } }
+{ "action": "asset.find", "params": { "type": "texture", "label": "Environment" } }
+// → { "ok": true, "data": { "assets": [
+//     { "path": "Assets/Materials/Metal.mat", "guid": "...", "type": "Material" },
+//     ...
+//   ]}}
 
-### Этап 3: Работа с файлами
-- [ ] POST /api/file/write (с auto-compile)
-- [ ] GET /api/file/read
-- [ ] GET /api/assets/find
-- [ ] POST /api/assets/create-folder
-- [ ] DELETE /api/assets/delete
+// Информация об ассете
+{ "action": "asset.info", "params": { "path": "Assets/Prefabs/Player.prefab" } }
+// → {
+//     "ok": true,
+//     "data": {
+//       "path": "Assets/Prefabs/Player.prefab",
+//       "guid": "a1b2c3d4...",
+//       "type": "GameObject (Prefab)",
+//       "fileSize": 4520,
+//       "dependencies": ["Assets/Materials/Player.mat"],
+//       "usedBy": ["Assets/Scenes/Level1.unity"]
+//     }
+//   }
 
-### Этап 4: Сцены и GameObject
-- [ ] SceneService
-- [ ] GameObjectService
-- [ ] GET /api/scene/hierarchy
-- [ ] POST /api/gameobject/create
-- [ ] GET /api/gameobject/find
-- [ ] PUT /api/gameobject/modify
-- [ ] DELETE /api/gameobject/destroy
+// Дерево папок
+{ "action": "asset.tree", "params": { "path": "Assets", "depth": 2 } }
+```
 
-### Этап 5: Компоненты
-- [ ] TypeResolverService
-- [ ] ComponentService
-- [ ] POST /api/component/add
-- [ ] GET /api/component/get
-- [ ] PUT /api/component/set-fields
-- [ ] DELETE /api/component/remove
+### 5.2 Файловые операции
 
-### Этап 6: Префабы
-- [ ] PrefabService
-- [ ] POST /api/prefab/create
-- [ ] POST /api/prefab/instantiate
-- [ ] PUT /api/prefab/modify
+```json
+// Записать файл (скрипты, шейдеры, любой текст)
+{ "action": "asset.file.write", "params": {
+  "path": "Assets/Scripts/EnemyAI.cs",
+  "content": "using UnityEngine;\n\npublic class EnemyAI : MonoBehaviour\n{\n    public float speed = 5f;\n}"
+}}
 
-### Этап 7: Батч и дополнительное
-- [ ] POST /api/batch/execute
-- [ ] POST /api/editor/play|stop|pause
-- [ ] Управление тегами/слоями
-- [ ] UACFSettings + SettingsProvider
-- [ ] UACFEditorWindow (статус)
+// Прочитать файл
+{ "action": "asset.file.read", "params": { "path": "Assets/Scripts/PlayerMovement.cs" } }
+// → { "ok": true, "data": { "content": "using UnityEngine;\n\npublic class..." } }
 
-### Этап 8: Тестирование и документация
-- [ ] Unit тесты
-- [ ] Интеграционные тесты
-- [ ] README с примерами curl
-- [ ] Cursor Rules файл (.cursorrules) с описанием API для агента
-- [ ] CLAUDE.md файл с инструкциями для Claude Code
+// Переместить/переименовать
+{ "action": "asset.file.move", "params": { 
+  "from": "Assets/Scripts/Old/Enemy.cs", 
+  "to": "Assets/Scripts/AI/EnemyAI.cs" 
+}}
+
+// Удалить
+{ "action": "asset.file.delete", "params": { "path": "Assets/Scripts/Unused.cs" } }
+
+// Создать папку
+{ "action": "asset.folder.create", "params": { "path": "Assets/Prefabs/Enemies" } }
+
+// Обновить базу ассетов (после записи файлов)
+{ "action": "asset.refresh" }
+{ "action": "asset.refresh", "params": { "path": "Assets/Scripts/EnemyAI.cs" } }
+```
+
+### 5.3 Создание ассетов
+
+```json
+// Материал
+{ "action": "asset.create.material", "params": {
+  "path": "Assets/Materials/EnemyRed.mat",
+  "shader": "Standard",
+  "properties": {
+    "_Color": [1, 0, 0, 1],
+    "_Metallic": 0.5,
+    "_Glossiness": 0.8
+  }
+}}
+
+// ScriptableObject
+{ "action": "asset.create.scriptableObject", "params": {
+  "path": "Assets/Data/EnemyConfig.asset",
+  "type": "EnemyConfig",
+  "properties": {
+    "health": 100,
+    "speed": 3.5,
+    "damage": 10
+  }
+}}
+
+// Physic Material
+{ "action": "asset.create.physicMaterial", "params": {
+  "path": "Assets/Physics/Bouncy.physicMaterial",
+  "properties": {
+    "dynamicFriction": 0.2,
+    "bounciness": 0.8
+  }
+}}
+
+// Animation Clip
+{ "action": "asset.create.animationClip", "params": {
+  "path": "Assets/Animations/Spin.anim",
+  "curves": [
+    {
+      "path": "",
+      "property": "localEulerAnglesRaw.y",
+      "type": "Transform",
+      "keyframes": [
+        { "time": 0, "value": 0 },
+        { "time": 1, "value": 360 }
+      ]
+    }
+  ],
+  "wrapMode": "Loop"
+}}
+```
+
+---
+
+## Модуль 6: Префабы
+
+```json
+// Создать префаб из объекта на сцене
+{ "action": "prefab.create", "params": {
+  "sourceObject": "Enemy",
+  "path": "Assets/Prefabs/Enemy.prefab"
+}}
+
+// Инстанцировать на сцену
+{ "action": "prefab.instantiate", "params": {
+  "path": "Assets/Prefabs/Enemy.prefab",
+  "position": [10, 0, 5],
+  "rotation": [0, 180, 0],
+  "parent": "EnemyContainer",
+  "name": "Enemy_01"
+}}
+
+// Содержимое префаба (иерархия + компоненты без инстанцирования)
+{ "action": "prefab.contents", "params": { "path": "Assets/Prefabs/Player.prefab" } }
+
+// Редактировать префаб
+{ "action": "prefab.edit", "params": {
+  "path": "Assets/Prefabs/Enemy.prefab",
+  "operations": [
+    { "op": "addComponent", "target": ".", "type": "AudioSource" },
+    { "op": "setProperty", "target": ".", "component": "EnemyAI", "property": "speed", "value": 10 },
+    { "op": "addChild", "name": "HealthBar", "components": ["Canvas", "Slider"] },
+    { "op": "removeComponent", "target": "Model", "type": "MeshCollider" }
+  ]
+}}
+// target: "." — корень префаба, "Model" — дочерний объект по имени, "Model/Mesh" — по пути
+
+// Применить overrides
+{ "action": "prefab.apply", "params": { "object": "Enemy_01" } }
+
+// Сбросить overrides
+{ "action": "prefab.revert", "params": { "object": "Enemy_01" } }
+
+// Создать Prefab Variant
+{ "action": "prefab.createVariant", "params": {
+  "basePrefab": "Assets/Prefabs/Enemy.prefab",
+  "path": "Assets/Prefabs/EnemyBoss.prefab",
+  "overrides": {
+    ".": {
+      "EnemyAI": { "health": 500, "speed": 2.0 }
+    }
+  }
+}}
+```
+
+---
+
+## Модуль 7: Обратная связь
+
+### 7.1 Console
+
+```json
+{ "action": "console.get" }
+{ "action": "console.get", "params": { "type": "error" } }
+{ "action": "console.get", "params": { "type": "warning", "last": 10 } }
+{ "action": "console.get", "params": { "contains": "NullReference" } }
+{ "action": "console.get", "params": { "since": 1705312800 } }
+// → {
+//     "ok": true,
+//     "data": {
+//       "entries": [
+//         {
+//           "type": "error",
+//           "message": "NullReferenceException: Object reference not set...",
+//           "stackTrace": "at EnemyAI.Update() in Assets/Scripts/EnemyAI.cs:42",
+//           "timestamp": 1705312856,
+//           "count": 3
+//         }
+//       ]
+//     }
+//   }
+
+// Очистить
+{ "action": "console.clear" }
+```
+
+### 7.2 Статус компиляции
+
+```json
+{ "action": "editor.compilationStatus" }
+// → {
+//     "ok": true,
+//     "data": {
+//       "isCompiling": false,
+//       "hasErrors": true,
+//       "errors": [
+//         {
+//           "file": "Assets/Scripts/EnemyAI.cs",
+//           "line": 42,
+//           "column": 15,
+//           "message": "'playerTransform' does not exist in the current context",
+//           "severity": "error"
+//         }
+//       ],
+//       "warnings": [
+//         {
+//           "file": "Assets/Scripts/Utils.cs",
+//           "line": 10,
+//           "message": "Variable 'temp' is assigned but never used",
+//           "severity": "warning"
+//         }
+//       ]
+//     }
+//   }
+```
+
+### 7.3 Скриншот
+
+```json
+{ "action": "editor.screenshot", "params": { "view": "scene" } }
+{ "action": "editor.screenshot", "params": { "view": "game", "width": 1920, "height": 1080 } }
+{ "action": "editor.screenshot", "params": { "camera": "SecurityCam", "width": 512, "height": 512 } }
+// → { "ok": true, "data": { "base64": "iVBORw0KGgo...", "format": "png", "width": 1920, "height": 1080 } }
+```
+
+---
+
+## Модуль 8: Editor
+
+### 8.1 Play Mode
+
+```json
+{ "action": "editor.play" }
+{ "action": "editor.stop" }
+{ "action": "editor.pause" }
+{ "action": "editor.step" }
+{ "action": "editor.playState" }
+// → { "ok": true, "data": { "state": "playing", "time": 12.5, "frameCount": 750 } }
+```
+
+### 8.2 Undo/Redo
+
+```json
+{ "action": "editor.undo" }
+{ "action": "editor.redo" }
+{ "action": "editor.undoHistory" }
+// → { "ok": true, "data": { "history": ["Create 'Enemy'", "Add Rigidbody", "Move 'Enemy'"] } }
+```
+
+### 8.3 Selection и Focus
+
+```json
+// Выделить объект (чтобы человек видел что агент делает)
+{ "action": "editor.select", "params": { "object": "Player" } }
+{ "action": "editor.select", "params": { "objects": ["Enemy_01", "Enemy_02"] } }
+
+// Что выделено
+{ "action": "editor.selection" }
+
+// Фокус камеры Scene View
+{ "action": "editor.focus", "params": { "object": "Player" } }
+```
+
+### 8.4 Проект
+
+```json
+{ "action": "project.info" }
+// → {
+//     "ok": true,
+//     "data": {
+//       "unityVersion": "2022.3.20f1",
+//       "projectName": "MyGame",
+//       "projectPath": "/Users/dev/MyGame",
+//       "renderPipeline": "URP",
+//       "scriptingBackend": "IL2CPP",
+//       "targetPlatform": "Windows",
+//       "packages": [
+//         { "name": "com.unity.render-pipelines.universal", "version": "14.0.9" }
+//       ]
+//     }
+//   }
+
+// Теги, слои
+{ "action": "project.tags" }
+{ "action": "project.layers" }
+
+// Project Settings
+{ "action": "project.settings.get", "params": { "category": "physics" } }
+{ "action": "project.settings.set", "params": { 
+  "category": "physics", 
+  "properties": { "gravity": [0, -15, 0] } 
+}}
+```
+
+---
+
+## Модуль 9: Runtime (Play Mode)
+
+```json
+// Инспекция runtime-значений (только в Play Mode)
+{ "action": "runtime.inspect", "params": {
+  "object": "Player",
+  "component": "Rigidbody"
+}}
+// → { "ok": true, "data": { "velocity": [2.3, -0.1, 1.5], "angularVelocity": [0,0,0] } }
+
+// Вызвать метод
+{ "action": "runtime.invoke", "params": {
+  "object": "Player",
+  "component": "PlayerHealth",
+  "method": "TakeDamage",
+  "args": [25]
+}}
+// → { "ok": true, "data": { "result": null } }
+```
+
+---
+
+## Модуль 10: Тесты
+
+```json
+// Запустить тесты
+{ "action": "tests.run" }
+{ "action": "tests.run", "params": { "filter": "EditMode" } }
+{ "action": "tests.run", "params": { "filter": "EnemyAITests" } }
+
+// Результаты
+{ "action": "tests.results" }
+// → {
+//     "ok": true,
+//     "data": {
+//       "passed": 15,
+//       "failed": 2,
+//       "skipped": 1,
+//       "failures": [
+//         { 
+//           "test": "EnemyAITests.TestPathfinding", 
+//           "message": "Expected 5 but got 3",
+//           "stackTrace": "..."
+//         }
+//       ]
+//     }
+//   }
+```
+
+---
+
+## Модуль 11: Batch
+
+```json
+{
+  "action": "batch",
+  "params": {
+    "undoGroup": "Create Enemy Squad",
+    "stopOnError": true,
+    "operations": [
+      { "action": "scene.object.create", "params": { "name": "EnemySquad" } },
+      { "action": "prefab.instantiate", "params": { 
+        "path": "Assets/Prefabs/Enemy.prefab", "parent": "EnemySquad", 
+        "position": [0,0,0], "name": "Enemy_01" 
+      }},
+      { "action": "prefab.instantiate", "params": { 
+        "path": "Assets/Prefabs/Enemy.prefab", "parent": "EnemySquad", 
+        "position": [5,0,0], "name": "Enemy_02" 
+      }},
+      { "action": "prefab.instantiate", "params": { 
+        "path": "Assets/Prefabs/Enemy.prefab", "parent": "EnemySquad", 
+        "position": [10,0,0], "name": "Enemy_03" 
+      }}
+    ]
+  }
+}
+// → {
+//     "ok": true,
+//     "data": {
+//       "results": [
+//         { "ok": true, "data": { "instanceId": 200 } },
+//         { "ok": true, "data": { "instanceId": 201 } },
+//         { "ok": true, "data": { "instanceId": 202 } },
+//         { "ok": true, "data": { "instanceId": 203 } }
+//       ],
+//       "undoGroup": "Create Enemy Squad"
+//     }
+//   }
+// При stopOnError: true — если операция N упала, операции N+1... не выполняются,
+// предыдущие откатываются через Undo
+```
+
+---
+
+## Полный список actions
+
+```
+── API ──
+api.list                          Список всех actions с описаниями
+api.help                          Подробная справка по action
+api.prompt                        Готовый system prompt для агента
+api.logs                          Лог запросов к UACF
+
+── EXECUTE ──
+execute                           Выполнить произвольный C# код
+execute.validate                  Проверить компиляцию без выполнения
+execute.method                    Вызвать статический метод из проекта
+
+── SCENE ──
+scene.hierarchy.get               Иерархия активной сцены
+scene.open                        Открыть сцену
+scene.new                         Создать новую сцену
+scene.save                        Сохранить сцену
+scene.list                        Все сцены в проекте
+scene.buildSettings.get           Сцены в Build Settings
+scene.buildSettings.add           Добавить сцену в Build Settings
+scene.buildSettings.remove        Убрать сцену из Build Settings
+scene.validate                    Валидация сцены
+scene.object.create               Создать GameObject
+scene.object.createPrimitive      Создать примитив
+scene.object.find                 Найти GameObject
+scene.object.details              Подробная информация об объекте
+scene.object.set                  Изменить GameObject
+scene.object.destroy              Удалить GameObject
+scene.object.duplicate            Дублировать GameObject
+
+── COMPONENT ──
+component.list                    Список компонентов объекта
+component.get                     Свойства компонента
+component.add                     Добавить компонент
+component.set                     Изменить свойства компонента
+component.remove                  Удалить компонент
+component.setEnabled              Включить/выключить компонент
+component.serialized.get          Serialized properties
+component.serialized.set          Установить serialized properties
+
+── ASSET ──
+asset.find                        Поиск ассетов
+asset.info                        Информация об ассете
+asset.tree                        Дерево папок
+asset.file.write                  Записать файл
+asset.file.read                   Прочитать файл
+asset.file.move                   Переместить файл
+asset.file.delete                 Удалить файл
+asset.folder.create               Создать папку
+asset.refresh                     Обновить базу ассетов
+asset.create.material             Создать материал
+asset.create.scriptableObject     Создать ScriptableObject
+asset.create.physicMaterial       Создать Physic Material
+asset.create.animationClip        Создать Animation Clip
+
+── PREFAB ──
+prefab.create                     Создать префаб из объекта
+prefab.instantiate                Инстанцировать на сцену
+prefab.contents                   Содержимое префаба
+prefab.edit                       Редактировать префаб
+prefab.apply                      Применить overrides
+prefab.revert                     Сбросить overrides
+prefab.createVariant              Создать Prefab Variant
+
+── CONSOLE ──
+console.get                       Получить логи
+console.clear                     Очистить консоль
+
+── EDITOR ──
+editor.compilationStatus          Статус компиляции
+editor.screenshot                 Скриншот Scene/Game View
+editor.play                       Войти в Play Mode
+editor.stop                       Выйти из Play Mode
+editor.pause                      Пауза
+editor.step                       Один кадр
+editor.playState                  Текущее состояние Play Mode
+editor.undo                       Отменить
+editor.redo                       Повторить
+editor.undoHistory                История undo
+editor.select                     Выделить объект
+editor.selection                  Текущее выделение
+editor.focus                      Фокус камеры на объекте
+
+── PROJECT ──
+project.info                      Информация о проекте
+project.tags                      Список тегов
+project.layers                    Список слоёв
+project.settings.get              Настройки проекта
+project.settings.set              Изменить настройки
+
+── RUNTIME ──
+runtime.inspect                   Инспекция в Play Mode
+runtime.invoke                    Вызов метода в Play Mode
+
+── TESTS ──
+tests.run                         Запустить тесты
+tests.results                     Результаты тестов
+
+── BATCH ──
+batch                             Пакетное выполнение операций
+```
+
+---
+
+## Приоритеты реализации
+
+### Фаза 1 — Без этого не работает
+
+```
+ 1. Единый POST endpoint + формат запросов/ответов
+ 2. api.list, api.help, api.prompt
+ 3. execute (произвольный C#)
+ 4. scene.hierarchy.get
+ 5. scene.object.create / find / set / destroy
+ 6. component.list / get / add / set / remove
+ 7. asset.file.write / read
+ 8. asset.refresh
+ 9. console.get
+10. editor.compilationStatus
+```
+
+### Фаза 2 — Продуктивная работа
+
+```
+11. scene.open / save / new / list
+12. scene.object.duplicate / createPrimitive
+13. prefab.create / instantiate / contents / edit
+14. asset.find / info / tree
+15. asset.create.material
+16. editor.undo / redo
+17. editor.play / stop / pause / playState
+18. editor.select / focus
+19. scene.validate
+20. project.info
+21. batch
+```
+
+### Фаза 3 — Полнота
+
+```
+22. component.serialized.get / set
+23. component.setEnabled
+24. asset.file.move / delete
+25. asset.folder.create
+26. asset.create.scriptableObject / physicMaterial / animationClip
+27. prefab.apply / revert / createVariant
+28. editor.screenshot
+29. editor.undoHistory / selection
+30. project.tags / layers / settings
+31. runtime.inspect / invoke
+32. tests.run / results
+33. execute.validate / execute.method
+34. scene.buildSettings.*
+35. api.logs
+36. editor.step
+```

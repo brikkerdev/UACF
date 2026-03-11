@@ -2,6 +2,8 @@
 
 HTTP API server in Unity Editor for AI agents (Cursor, Claude Code) to control Unity projects via `curl` without manual interaction.
 
+**UACF v1.1** uses a unified action-based API. All requests go to `POST /uacf`.
+
 ## Requirements
 
 - Unity 6.3+
@@ -21,100 +23,123 @@ Add to your project's `Packages/manifest.json`:
 
 ## Quick Start
 
-1. Open Unity Editor - the UACF server starts automatically on port 7890
-2. Check status: `curl http://localhost:7890/api/status`
-3. Configure: Edit > Project Settings > UACF
+1. Open Unity Editor - the UACF server starts automatically on port 6400
+2. List actions: `curl -X POST http://localhost:6400/uacf -H "Content-Type: application/json" -d '{"action":"api.list"}'`
+3. Configure: `ProjectSettings/UACF/config.json` or Edit > Project Settings > UACF
+
+## API Format
+
+All requests: **POST** to `/uacf` with JSON:
+
+```json
+{
+  "action": "action.name",
+  "params": { /* optional parameters */ }
+}
+```
 
 ## API Examples
 
-### Status
+### List all actions
 ```bash
-curl http://localhost:7890/api/status
-```
-
-### Ping
-```bash
-curl http://127.0.0.1:7890/api/ping
-```
-
-### Compile (wait for completion)
-```bash
-curl -X POST http://localhost:7890/api/compile/request \
+curl -X POST http://localhost:6400/uacf \
   -H "Content-Type: application/json" \
-  -d '{"wait":true,"timeout_seconds":60}'
+  -d '{"action":"api.list"}'
+```
+
+### Get scene hierarchy
+```bash
+curl -X POST http://localhost:6400/uacf \
+  -H "Content-Type: application/json" \
+  -d '{"action":"scene.hierarchy.get","params":{"depth":2,"components":true}}'
 ```
 
 ### Create GameObject with components
 ```bash
-curl -X POST http://localhost:7890/api/gameobject/create \
+curl -X POST http://localhost:6400/uacf \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Player",
-    "tag": "Player",
-    "components": [
-      {"type": "Rigidbody", "fields": {"mass": 1.0}},
-      {"type": "BoxCollider", "fields": {"size": {"x":1,"y":1,"z":1}}}
-    ]
+    "action": "scene.object.create",
+    "params": {
+      "name": "Player",
+      "tag": "Player",
+      "components": [
+        {"type": "Rigidbody", "properties": {"mass": 1.0}},
+        {"type": "BoxCollider", "properties": {"size": [1,1,1]}}
+      ]
+    }
+  }'
+```
+
+### Write file
+```bash
+curl -X POST http://localhost:6400/uacf \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "asset.file.write",
+    "params": {
+      "path": "Assets/Scripts/PlayerController.cs",
+      "content": "using UnityEngine;\n\npublic class PlayerController : MonoBehaviour { }"
+    }
   }'
 ```
 
 ### Save scene
 ```bash
-curl -X POST http://localhost:7890/api/scene/save
-```
-
-### Write file and compile
-```bash
-curl -X POST http://localhost:7890/api/file/write \
+curl -X POST http://localhost:6400/uacf \
   -H "Content-Type: application/json" \
-  -d '{
-    "path": "Assets/Scripts/PlayerController.cs",
-    "content": "using UnityEngine;\n\npublic class PlayerController : MonoBehaviour { }",
-    "auto_refresh": true,
-    "wait_compile": true
-  }'
+  -d '{"action":"scene.save"}'
 ```
 
-## Endpoints Overview
+### Enter Play Mode
+```bash
+curl -X POST http://localhost:6400/uacf \
+  -H "Content-Type: application/json" \
+  -d '{"action":"editor.play"}'
+```
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /api/ping | Health check (no main thread) |
-| GET | /api/status | Server status |
-| POST | /api/assets/refresh | Refresh AssetDatabase |
-| GET | /api/assets/find | Find assets |
-| POST | /api/compile/request | Trigger compilation |
-| GET | /api/compile/status | Compilation status |
-| GET | /api/compile/errors | Get compile errors |
-| POST | /api/file/write | Write file |
-| GET | /api/file/read | Read file |
-| GET | /api/scene/list | List scenes |
-| POST | /api/scene/open | Open scene |
-| POST | /api/scene/save | Save scene |
-| GET | /api/scene/hierarchy | Get hierarchy |
-| POST | /api/gameobject/create | Create GameObject |
-| GET | /api/gameobject/find | Find GameObjects |
-| POST | /api/component/add | Add component |
-| PUT | /api/component/set-fields | Set component fields |
-| POST | /api/prefab/create | Create prefab |
-| POST | /api/prefab/instantiate | Instantiate prefab |
-| POST | /api/batch/execute | Execute batch operations |
-| POST | /api/editor/play | Start Play Mode |
-| POST | /api/editor/stop | Stop Play Mode |
+## Key Actions
+
+| Action | Description |
+|--------|-------------|
+| api.list | List all actions with docs |
+| api.help | Help for specific action |
+| api.prompt | System prompt for agent |
+| scene.hierarchy.get | Scene hierarchy |
+| scene.object.create | Create GameObject |
+| scene.object.find | Find GameObjects |
+| scene.save | Save scene |
+| component.add | Add component |
+| component.set | Set component properties |
+| asset.file.write | Write file |
+| asset.file.read | Read file |
+| asset.refresh | Refresh AssetDatabase |
+| editor.compilationStatus | Compilation status |
+| editor.play | Play Mode |
+| editor.stop | Stop Play Mode |
+| batch | Batch operations |
 
 ## Configuration
 
-Edit > Project Settings > UACF
+**ProjectSettings/UACF/config.json** (created on first run):
 
-- **Port**: HTTP server port (default: 7890)
-- **Auto Start**: Start server when Editor loads
-- **Log Requests**: Log each request to Console
-- **Request Timeout**: Request timeout in seconds
-- **Compile Timeout**: Max wait for compilation
-- **Enable Batch Endpoint**: Allow /api/batch/execute
+```json
+{
+  "port": 6400,
+  "host": "127.0.0.1",
+  "token": "auto-generated",
+  "allowExecute": true,
+  "logRequests": true,
+  "logFile": "Logs/UACF/session.log"
+}
+```
+
+**Edit > Project Settings > UACF** (ScriptableSingleton fallback):
+
+- Port, Auto Start, Log Requests, Request Timeout, Compile Timeout, Enable Batch Endpoint
 
 ## Security
 
 - Server listens only on localhost (127.0.0.1)
-- No external network access by default
+- Optional Bearer token (set in config.json)
 - All operations support Undo

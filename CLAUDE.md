@@ -1,50 +1,88 @@
 # UACF - Unity Autonomous Control Framework
 
-This Unity project has UACF enabled. When the Unity Editor is running, an HTTP API server is available at **http://localhost:7890**.
+This Unity project has UACF v1.1 enabled. When the Unity Editor is running, an HTTP API server is available at **http://localhost:6400** (or configured port).
 
 ## Workflow for AI Agents
 
-1. **Check status**: `curl http://127.0.0.1:7890/api/status` or `curl http://127.0.0.1:7890/api/ping`
-2. **Create/edit C# files** in Assets/ (via file system or `POST /api/file/write`)
-3. **Compile**: `curl -X POST http://localhost:7890/api/compile/request -H "Content-Type: application/json" -d '{"wait":true}'`
-4. **Check errors**: `curl http://localhost:7890/api/compile/errors?severity=error`
-5. **Create GameObjects**: Use `POST /api/gameobject/create` with components
-6. **Set component fields**: Use `PUT /api/component/set-fields` for references (e.g. groundCheck)
-7. **Save scene**: `curl -X POST http://localhost:7890/api/scene/save`
-8. **Play**: `curl -X POST http://localhost:7890/api/editor/play`
+1. **List actions**: `curl -X POST http://127.0.0.1:6400/uacf -H "Content-Type: application/json" -d '{"action":"api.list"}'`
+2. **Get help**: `curl -X POST http://127.0.0.1:6400/uacf -H "Content-Type: application/json" -d '{"action":"api.help","params":{"action":"scene.object.create"}}'`
+3. **Create/edit C# files**: `{"action":"asset.file.write","params":{"path":"Assets/Scripts/Player.cs","content":"..."}}`
+4. **Refresh assets**: `{"action":"asset.refresh"}`
+5. **Get hierarchy**: `{"action":"scene.hierarchy.get","params":{"depth":2,"components":true}}`
+6. **Create GameObject**: `{"action":"scene.object.create","params":{"name":"Player","tag":"Player","components":[{"type":"Rigidbody","properties":{"mass":1}}]}}`
+7. **Save scene**: `{"action":"scene.save"}`
+8. **Play**: `{"action":"editor.play"}`
 
-## Key Endpoints
+## Request Format
 
-| Action | Endpoint |
-|--------|----------|
-| Status | GET /api/status |
-| Ping | GET /api/ping |
-| Compile & wait | POST /api/compile/request (body: `{"wait":true}`) |
-| Create GameObject | POST /api/gameobject/create |
-| Add component | POST /api/component/add |
-| Set fields | PUT /api/component/set-fields |
-| Hierarchy | GET /api/scene/hierarchy?include_components=true |
-| Save scene | POST /api/scene/save |
-| Write file | POST /api/file/write |
-
-## Batch Operations
-
-Use `POST /api/batch/execute` to run multiple operations atomically:
+All requests: **POST** to `/uacf` with JSON body:
 
 ```json
 {
-  "operations": [
-    {"id": "1", "endpoint": "POST /api/gameobject/create", "body": {"name": "Player", "tag": "Player"}},
-    {"id": "2", "endpoint": "POST /api/component/add", "body": {"target": {"name": "Player"}, "component_type": "Rigidbody", "fields": {"mass": 1}}}
-  ],
-  "stop_on_error": true
+  "action": "scene.hierarchy.get",
+  "params": { "depth": 2, "components": true }
 }
 ```
+
+## Response Format
+
+Success:
+```json
+{ "ok": true, "data": { ... }, "duration": 0.034 }
+```
+
+Error:
+```json
+{ "ok": false, "error": { "code": "OBJECT_NOT_FOUND", "message": "...", "suggestion": "..." }, "duration": 0.002 }
+```
+
+## Key Actions
+
+| Action | Description |
+|--------|-------------|
+| api.list | List all available actions |
+| api.help | Get help for specific action |
+| api.prompt | Get system prompt for agent |
+| scene.hierarchy.get | Get scene hierarchy |
+| scene.object.create | Create GameObject |
+| scene.object.find | Find GameObjects |
+| scene.save | Save scene |
+| component.add | Add component |
+| component.set | Set component properties |
+| asset.file.write | Write file |
+| asset.file.read | Read file |
+| asset.refresh | Refresh AssetDatabase |
+| editor.compilationStatus | Get compile status |
+| editor.play | Enter Play Mode |
+| editor.stop | Exit Play Mode |
+| batch | Execute batch operations |
+
+## Batch Operations
+
+```json
+{
+  "action": "batch",
+  "params": {
+    "operations": [
+      {"action": "scene.object.create", "params": {"name": "EnemySquad"}},
+      {"action": "prefab.instantiate", "params": {"path": "Assets/Prefabs/Enemy.prefab", "parent": "EnemySquad", "name": "Enemy_01"}}
+    ],
+    "undoGroup": "Create Squad",
+    "stopOnError": true
+  }
+}
+```
+
+## Configuration
+
+- Config file: `ProjectSettings/UACF/config.json`
+- Port: 6400 (default)
+- Bearer token: Optional, auto-generated on first run (see Unity Console)
+- When token is set: `Authorization: Bearer YOUR_TOKEN` header required
 
 ## Important Notes
 
 - All Unity API calls run on the main thread - requests may queue
-- In Play Mode, scene modification endpoints return 409 CONFLICT
-- During compilation, some endpoints return 503 SERVER_BUSY
-- Component type names: use "Rigidbody", "BoxCollider", "PlayerController" (script name)
-- For object references in fields: `{"reference": {"name": "OtherObject"}}`
+- In Play Mode, scene modification actions return CONFLICT
+- During compilation, some requests may return SERVER_BUSY
+- Component types: "Rigidbody", "BoxCollider", "PlayerController" (script name)
