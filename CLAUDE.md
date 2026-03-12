@@ -4,6 +4,8 @@ This Unity project has UACF v1.1 enabled. When the Unity Editor is running, an H
 
 ## Workflow for AI Agents
 
+**Before scene actions**: Call `editor.compilationStatus` first. If `isCompiling: true`, do not call scene actions — they will return `SERVER_BUSY`. On `SERVER_BUSY`, retry after a few seconds.
+
 1. **List actions**: `curl -X POST http://127.0.0.1:7890/uacf -H "Content-Type: application/json" -d '{"action":"api.list"}'`
 2. **Get help**: `curl -X POST http://127.0.0.1:7890/uacf -H "Content-Type: application/json" -d '{"action":"api.help","params":{"action":"scene.object.create"}}'`
 3. **Create/edit C# files**: `{"action":"asset.file.write","params":{"path":"Assets/Scripts/Player.cs","content":"..."}}`
@@ -77,8 +79,6 @@ Error:
 
 - Config file: `ProjectSettings/UACF/config.json`
 - Port: 7890 (default)
-- Bearer token: Optional, auto-generated on first run (see Unity Console)
-- When token is set: `Authorization: Bearer YOUR_TOKEN` header required
 
 ## Important Notes
 

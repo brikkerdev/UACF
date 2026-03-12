@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using UACF.Config;
 using UACF.Models;
 
 namespace UACF.Core
@@ -16,14 +15,6 @@ namespace UACF.Core
 
         public async Task Route(RequestContext ctx)
         {
-            var config = UACFConfig.Instance;
-            if (!string.IsNullOrEmpty(config.Token) && !config.ValidateToken(ctx.AuthHeader))
-            {
-                ctx.Respond(401, UacfResponse.Fail("UNAUTHORIZED", "Invalid or missing Bearer token",
-                    "Add header: Authorization: Bearer YOUR_TOKEN", 0));
-                return;
-            }
-
             if (ctx.Method != "POST" || !IsUacfPath(ctx.Path))
             {
                 ctx.Respond(404, new

@@ -6,10 +6,10 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/SampleScene.unity
+    path: Assets/UACF/Scenes/SampleScene.unity
     guid: 2cda990e2423bbf4892e6590ba056729
   - enabled: 1
-    path: Assets/Scenes/DemoScene.unity
+    path: Assets/UACF/Scenes/DemoScene.unity
     guid: b06495b56533aec40b75ddfe515d9a17
   - enabled: 1
     path: Assets/Scenes/VSCodeDemoScene.unity

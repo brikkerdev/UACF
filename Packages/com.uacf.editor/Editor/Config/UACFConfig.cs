@@ -11,7 +11,6 @@ namespace UACF.Config
     {
         public int Port { get; set; } = 7890;
         public string Host { get; set; } = "127.0.0.1";
-        public string Token { get; set; }
         public bool AllowExecute { get; set; } = true;
         public bool LogRequests { get; set; } = true;
         public string LogFile { get; set; } = "Logs/UACF/session.log";
@@ -50,7 +49,6 @@ namespace UACF.Config
                     var jo = JObject.Parse(json);
                     if (jo["port"] != null) _instance.Port = jo["port"].Value<int>();
                     if (jo["host"] != null) _instance.Host = jo["host"].Value<string>();
-                    if (jo["token"] != null) _instance.Token = jo["token"].Value<string>();
                     if (jo["allowExecute"] != null) _instance.AllowExecute = jo["allowExecute"].Value<bool>();
                     if (jo["logRequests"] != null) _instance.LogRequests = jo["logRequests"].Value<bool>();
                     if (jo["logFile"] != null) _instance.LogFile = jo["logFile"].Value<string>();
@@ -59,13 +57,6 @@ namespace UACF.Config
                 {
                     UnityEngine.Debug.LogWarning($"[UACF] Failed to load config: {ex.Message}");
                 }
-            }
-
-            if (string.IsNullOrEmpty(_instance.Token))
-            {
-                _instance.Token = GenerateToken();
-                Save(_instance);
-                UnityEngine.Debug.Log($"[UACF] Auth token (first run): {_instance.Token}");
             }
         }
 
@@ -81,30 +72,12 @@ namespace UACF.Config
             {
                 ["port"] = cfg.Port,
                 ["host"] = cfg.Host,
-                ["token"] = cfg.Token ?? "",
                 ["allowExecute"] = cfg.AllowExecute,
                 ["logRequests"] = cfg.LogRequests,
                 ["logFile"] = cfg.LogFile ?? "Logs/UACF/session.log"
             };
 
             File.WriteAllText(path, jo.ToString(Formatting.Indented));
-        }
-
-        private static string GenerateToken()
-        {
-            var bytes = new byte[16];
-            new System.Random().NextBytes(bytes);
-            return BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant().Substring(0, 24);
-        }
-
-        public bool ValidateToken(string authHeader)
-        {
-            if (string.IsNullOrEmpty(Token)) return true;
-            if (string.IsNullOrEmpty(authHeader)) return false;
-            var prefix = "Bearer ";
-            if (!authHeader.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
-            var token = authHeader.Substring(prefix.Length).Trim();
-            return token == Token;
         }
     }
 }

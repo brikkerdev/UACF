@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UACF.Models;
@@ -9,6 +10,10 @@ namespace UACF.Services
 {
     public class GameObjectService
     {
+        private static bool IsValidTag(string tag)
+        {
+            return !string.IsNullOrEmpty(tag) && InternalEditorUtility.tags.Contains(tag);
+        }
         public static GameObject FindByTarget(object target)
         {
             if (target == null) return null;
@@ -45,7 +50,7 @@ namespace UACF.Services
             if (dict.TryGetValue("tag", out var tagObj))
             {
                 var tag = tagObj?.ToString();
-                if (!string.IsNullOrEmpty(tag))
+                if (IsValidTag(tag))
                 {
                     var arr = GameObject.FindGameObjectsWithTag(tag);
                     return arr.Length > 0 ? arr[0] : null;
@@ -208,6 +213,8 @@ namespace UACF.Services
 
             if (!string.IsNullOrEmpty(payload.Tag))
             {
+                if (!IsValidTag(payload.Tag))
+                    return new GameObject[0];
                 var arr = GameObject.FindGameObjectsWithTag(payload.Tag);
                 return arr;
             }
@@ -235,7 +242,7 @@ namespace UACF.Services
                 go.name = payload.Name;
             if (payload.Active.HasValue)
                 go.SetActive(payload.Active.Value);
-            if (!string.IsNullOrEmpty(payload.Tag))
+            if (!string.IsNullOrEmpty(payload.Tag) && IsValidTag(payload.Tag))
                 go.tag = payload.Tag;
             if (!string.IsNullOrEmpty(payload.LayerName))
             {

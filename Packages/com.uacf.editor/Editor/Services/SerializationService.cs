@@ -18,6 +18,18 @@ namespace UACF.Services
             return result.ToArray();
         }
 
+        private static string GetTagSafe(GameObject go)
+        {
+            try { return go.tag ?? ""; }
+            catch { return ""; }
+        }
+
+        private static string GetLayerNameSafe(GameObject go)
+        {
+            try { return LayerMask.LayerToName(go.layer) ?? ""; }
+            catch { return ""; }
+        }
+
         private static GameObjectInfo SerializeGameObject(GameObject go, string path, int maxDepth, int currentDepth, bool includeComponents)
         {
             var info = new GameObjectInfo
@@ -26,9 +38,9 @@ namespace UACF.Services
                 Name = go.name,
                 Active = go.activeInHierarchy,
                 ActiveSelf = go.activeSelf,
-                Tag = go.tag,
+                Tag = GetTagSafe(go),
                 Layer = go.layer,
-                LayerName = LayerMask.LayerToName(go.layer),
+                LayerName = GetLayerNameSafe(go),
                 Static = go.isStatic,
                 Path = string.IsNullOrEmpty(path) ? "/" + go.name : path + "/" + go.name,
                 Transform = new TransformInfo

@@ -21,7 +21,6 @@
 ```bash
 curl -X POST http://localhost:6400/uacf \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer TOKEN" \
   -d '{
     "action": "scene.hierarchy.get",
     "params": {
@@ -88,17 +87,10 @@ curl -X POST http://localhost:6400/uacf \
 {
   "port": 6400,
   "host": "127.0.0.1",
-  "token": "auto-generated-on-first-run",
   "allowExecute": true,
   "logRequests": true,
   "logFile": "Logs/UACF/session.log"
 }
-```
-
-При первом запуске токен выводится в Unity Console:
-```
-[UACF] Server started on http://127.0.0.1:6400
-[UACF] Auth token: a7f3b2c1d4e5...
 ```
 
 ### 1.2 API Discovery

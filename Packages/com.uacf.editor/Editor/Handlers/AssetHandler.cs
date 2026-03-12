@@ -30,6 +30,12 @@ namespace UACF.Handlers
             dispatcher.Register("asset.create.material", HandleCreateMaterial);
             dispatcher.Register("asset.create.physicMaterial", HandleCreatePhysicMaterial);
             dispatcher.Register("asset.create.animationClip", HandleCreateAnimationClip);
+            dispatcher.Register("asset.create.fromFile", HandleCreateFromFile);
+            dispatcher.Register("asset.create.font", HandleCreateFont);
+            dispatcher.Register("asset.create.tmpFontAsset", HandleCreateTMPFontAsset);
+            dispatcher.Register("asset.create.renderTexture", HandleCreateRenderTexture);
+            dispatcher.Register("asset.create.cubemap", HandleCreateCubemap);
+            dispatcher.Register("asset.create.asset", HandleCreateAsset);
         }
 
         private static Task<UacfResponse> HandleFind(JObject p)
@@ -295,6 +301,36 @@ namespace UACF.Handlers
         private static Task<UacfResponse> HandleCreateAnimationClip(JObject p)
         {
             return MainThreadDispatcher.Enqueue(() => AssetCreationService.CreateAnimationClip(p));
+        }
+
+        private static Task<UacfResponse> HandleCreateFromFile(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() => AssetCreationService.CreateFromFile(p));
+        }
+
+        private static Task<UacfResponse> HandleCreateFont(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() => AssetCreationService.CreateFont(p));
+        }
+
+        private static Task<UacfResponse> HandleCreateTMPFontAsset(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() => AssetCreationService.CreateTMPFontAsset(p));
+        }
+
+        private static Task<UacfResponse> HandleCreateRenderTexture(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() => AssetCreationService.CreateRenderTexture(p));
+        }
+
+        private static Task<UacfResponse> HandleCreateCubemap(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() => AssetCreationService.CreateCubemap(p));
+        }
+
+        private static Task<UacfResponse> HandleCreateAsset(JObject p)
+        {
+            return MainThreadDispatcher.Enqueue(() => AssetCreationService.CreateAsset(p));
         }
 
         private static bool IsCompileAffectingPath(string path)

@@ -38,6 +38,10 @@ Content-Type: application/json
 | `scene.save` | Сохранение сцены |
 | `editor.compilationStatus` | Статус компиляции |
 
+## Scene-действия: проверка перед вызовом
+
+Перед вызовом scene-действий (`scene.hierarchy.get`, `scene.object.*`, `scene.save` и т.д.) проверьте `editor.compilationStatus`. При `isCompiling: true` не вызывайте scene-действия — получите `SERVER_BUSY`. При получении `SERVER_BUSY` повторите запрос через несколько секунд.
+
 ## Примеры curl
 
 ```bash

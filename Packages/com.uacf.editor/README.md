@@ -147,7 +147,6 @@ curl -X POST http://localhost:7890/uacf \
 {
   "port": 7890,
   "host": "127.0.0.1",
-  "token": "auto-generated",
   "allowExecute": true,
   "logRequests": true,
   "logFile": "Logs/UACF/session.log"
@@ -186,5 +185,4 @@ The `execute` action (arbitrary C# execution) works only when **Roslyn scripting
 ## Security
 
 - Server listens only on localhost (127.0.0.1)
-- Optional Bearer token (set in config.json)
 - All operations support Undo

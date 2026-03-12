@@ -310,6 +310,61 @@ namespace UACF.Core
                     new ParamDef("overwrite", "bool", false, "Overwrite existing asset")
                 },
                 new { action = "asset.create.animationClip", @params = new { path = "Assets/Animations/Spin.anim", wrapMode = "Loop", overwrite = true } });
+
+            Add("asset.create.fromFile", "Copy external file into project and import",
+                new ParamDef[] {
+                    new ParamDef("path", "string", true, "Destination path under Assets/ or Packages/"),
+                    new ParamDef("sourcePath", "string", true, "Absolute path to source file"),
+                    new ParamDef("overwrite", "bool", false, "Overwrite existing asset")
+                },
+                new { action = "asset.create.fromFile", @params = new { path = "Assets/Fonts/MyFont.ttf", sourcePath = "C:/Windows/Fonts/arial.ttf", overwrite = false } });
+
+            Add("asset.create.font", "Create Font asset from .ttf/.otf file",
+                new ParamDef[] {
+                    new ParamDef("path", "string", true, "Destination path under Assets/"),
+                    new ParamDef("sourcePath", "string", true, "Absolute path to .ttf or .otf file"),
+                    new ParamDef("overwrite", "bool", false, "Overwrite existing asset")
+                },
+                new { action = "asset.create.font", @params = new { path = "Assets/Fonts/MyFont.ttf", sourcePath = "C:/Fonts/MyFont.ttf", overwrite = false } });
+
+            Add("asset.create.tmpFontAsset", "Create TextMeshPro TMP_FontAsset from imported Font",
+                new ParamDef[] {
+                    new ParamDef("path", "string", true, "Path for .asset (e.g. Assets/Fonts/MyFont SDF.asset)"),
+                    new ParamDef("sourceFont", "string", true, "Asset path to imported .ttf/.otf Font"),
+                    new ParamDef("overwrite", "bool", false, "Overwrite existing asset")
+                },
+                new { action = "asset.create.tmpFontAsset", @params = new { path = "Assets/Fonts/MyFont SDF.asset", sourceFont = "Assets/Fonts/MyFont.ttf", overwrite = false } });
+
+            Add("asset.create.renderTexture", "Create RenderTexture asset",
+                new ParamDef[] {
+                    new ParamDef("path", "string", true, "RenderTexture path under Assets/"),
+                    new ParamDef("width", "int", false, "Width (default 256)"),
+                    new ParamDef("height", "int", false, "Height (default 256)"),
+                    new ParamDef("depth", "int", false, "Depth buffer bits (default 24)"),
+                    new ParamDef("overwrite", "bool", false, "Overwrite existing asset")
+                },
+                new { action = "asset.create.renderTexture", @params = new { path = "Assets/RT/MyRT.renderTexture", width = 512, height = 512, overwrite = false } });
+
+            Add("asset.create.cubemap", "Create Cubemap asset",
+                new ParamDef[] {
+                    new ParamDef("path", "string", true, "Cubemap path under Assets/"),
+                    new ParamDef("size", "int", false, "Face size (default 128)"),
+                    new ParamDef("overwrite", "bool", false, "Overwrite existing asset")
+                },
+                new { action = "asset.create.cubemap", @params = new { path = "Assets/Textures/Skybox.cubemap", size = 256, overwrite = false } });
+
+            Add("asset.create.asset", "Create asset by type (universal dispatcher)",
+                new ParamDef[] {
+                    new ParamDef("path", "string", true, "Asset path under Assets/"),
+                    new ParamDef("type", "string", true, "scriptableObject|material|physicMaterial|animationClip|panelSettings|font|tmpFontAsset|renderTexture|cubemap"),
+                    new ParamDef("subtype", "string", false, "ScriptableObject class name (required for scriptableObject)"),
+                    new ParamDef("shader", "string", false, "Shader name (for material)"),
+                    new ParamDef("sourcePath", "string", false, "Source file path (for font)"),
+                    new ParamDef("sourceFont", "string", false, "Imported Font path (for tmpFontAsset)"),
+                    new ParamDef("properties", "object", false, "Initial properties"),
+                    new ParamDef("overwrite", "bool", false, "Overwrite existing asset")
+                },
+                new { action = "asset.create.asset", @params = new { path = "Assets/Data/Config.asset", type = "scriptableObject", subtype = "GameConfig", overwrite = true } });
         }
 
         public static void RegisterEditor()

@@ -24,6 +24,17 @@ namespace UACF.Core
 
         private static void OnUpdate()
         {
+            ProcessQueue();
+        }
+
+        /// <summary>Processes the queue synchronously. For use in Edit Mode tests when EditorApplication.update is not pumped.</summary>
+        public static void ProcessQueueForTesting()
+        {
+            ProcessQueue();
+        }
+
+        private static void ProcessQueue()
+        {
             while (_queue.TryDequeue(out var action))
             {
                 try

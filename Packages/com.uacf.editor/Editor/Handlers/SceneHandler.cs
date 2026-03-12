@@ -27,10 +27,19 @@ namespace UACF.Handlers
             dispatcher.Register("scene.validate", HandleValidate);
         }
 
+        private static UacfResponse CheckEditorState()
+        {
+            if (EditorApplication.isCompiling)
+                return UacfResponse.Fail("SERVER_BUSY", "Editor is compiling", "Retry after compilation completes", 0);
+            return null;
+        }
+
         private static Task<UacfResponse> HandleHierarchyGet(JObject p)
         {
             return MainThreadDispatcher.Enqueue(() =>
             {
+                var busy = CheckEditorState();
+                if (busy != null) return busy;
                 if (EditorApplication.isPlaying)
                     return UacfResponse.Fail("CONFLICT", "Cannot get hierarchy in Play Mode", "Exit Play Mode first", 0);
 
@@ -82,6 +91,8 @@ namespace UACF.Handlers
         {
             return MainThreadDispatcher.Enqueue(() =>
             {
+                var busy = CheckEditorState();
+                if (busy != null) return busy;
                 if (EditorApplication.isPlaying)
                     return UacfResponse.Fail("CONFLICT", "Exit Play Mode first", null, 0);
 
@@ -99,6 +110,8 @@ namespace UACF.Handlers
         {
             return MainThreadDispatcher.Enqueue(() =>
             {
+                var busy = CheckEditorState();
+                if (busy != null) return busy;
                 if (EditorApplication.isPlaying)
                     return UacfResponse.Fail("CONFLICT", "Exit Play Mode first", null, 0);
 
@@ -113,6 +126,8 @@ namespace UACF.Handlers
         {
             return MainThreadDispatcher.Enqueue(() =>
             {
+                var busy = CheckEditorState();
+                if (busy != null) return busy;
                 if (EditorApplication.isPlaying)
                     return UacfResponse.Fail("CONFLICT", "Exit Play Mode first", null, 0);
 
@@ -126,6 +141,8 @@ namespace UACF.Handlers
         {
             return MainThreadDispatcher.Enqueue(() =>
             {
+                var busy = CheckEditorState();
+                if (busy != null) return busy;
                 var scenes = SceneService.GetLoadedScenes();
                 return UacfResponse.Success(new
                 {
@@ -138,6 +155,8 @@ namespace UACF.Handlers
         {
             return MainThreadDispatcher.Enqueue(() =>
             {
+                var busy = CheckEditorState();
+                if (busy != null) return busy;
                 var scenes = EditorBuildSettings.scenes;
                 return UacfResponse.Success(new
                 {
@@ -150,6 +169,8 @@ namespace UACF.Handlers
         {
             return MainThreadDispatcher.Enqueue(() =>
             {
+                var busy = CheckEditorState();
+                if (busy != null) return busy;
                 if (EditorApplication.isPlaying)
                     return UacfResponse.Fail("CONFLICT", "Exit Play Mode first", null, 0);
 
@@ -171,6 +192,8 @@ namespace UACF.Handlers
         {
             return MainThreadDispatcher.Enqueue(() =>
             {
+                var busy = CheckEditorState();
+                if (busy != null) return busy;
                 var path = p["path"]?.ToString();
                 if (string.IsNullOrEmpty(path))
                     return UacfResponse.Fail("INVALID_REQUEST", "path is required", null, 0);
@@ -185,8 +208,13 @@ namespace UACF.Handlers
         {
             return MainThreadDispatcher.Enqueue(() =>
             {
+                var busy = CheckEditorState();
+                if (busy != null) return busy;
+                var scene = SceneManager.GetActiveScene();
+                if (!scene.IsValid())
+                    return UacfResponse.Fail("SCENE_NOT_LOADED", "No active scene", null, 0);
                 var issues = new List<object>();
-                var roots = SceneManager.GetActiveScene().GetRootGameObjects();
+                var roots = scene.GetRootGameObjects();
                 foreach (var root in roots)
                     ValidateRecursive(root, issues);
 

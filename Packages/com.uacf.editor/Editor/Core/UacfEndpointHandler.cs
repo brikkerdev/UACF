@@ -1,8 +1,10 @@
 using System;
+using System.IO;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Unity.Plastic.Newtonsoft.Json;
 using Unity.Plastic.Newtonsoft.Json.Linq;
+using UACF.Config;
 using UACF.Models;
 
 namespace UACF.Core
@@ -48,7 +50,18 @@ namespace UACF.Core
             if (response.Duration == 0)
                 response.Duration = sw.Elapsed.TotalSeconds;
 
-            ctx.Respond(200, response);
+            try
+            {
+                ctx.Respond(200, response);
+            }
+            catch (IOException ex)
+            {
+                UACFLogger.Log($"Response write failed (client disconnected): {ex.Message}", LogLevel.Warning);
+            }
+            catch (ObjectDisposedException)
+            {
+                UACFLogger.Log("Response write failed (stream disposed)", LogLevel.Warning);
+            }
         }
     }
 }

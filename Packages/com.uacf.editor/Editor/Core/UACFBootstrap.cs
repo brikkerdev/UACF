@@ -52,11 +52,7 @@ namespace UACF.Core
                 var port = SessionState.GetInt(PortKey, config.Port);
                 if (port == 0) port = config.Port;
                 if (_server.Start(port))
-                {
                     SessionState.SetInt(PortKey, _server.Port);
-                    if (!string.IsNullOrEmpty(config.Token))
-                        UACFLogger.Log($"UACF Auth token: {config.Token}", Config.LogLevel.Info);
-                }
             }
         }
 

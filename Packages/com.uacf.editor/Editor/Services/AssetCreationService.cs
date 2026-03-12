@@ -116,6 +116,228 @@ namespace UACF.Services
             });
         }
 
+        public static UacfResponse CreateFromFile(JObject p)
+        {
+            var path = p["path"]?.ToString();
+            var sourcePath = p["sourcePath"]?.ToString();
+            var overwrite = p["overwrite"]?.Value<bool>() ?? false;
+
+            if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(sourcePath))
+                return UacfResponse.Fail("INVALID_REQUEST", "path and sourcePath are required", null, 0);
+
+            var normalizedPath = path.Replace("\\", "/").Trim();
+            if (!normalizedPath.StartsWith("Assets/", StringComparison.Ordinal) && !normalizedPath.StartsWith("Packages/", StringComparison.Ordinal))
+                return UacfResponse.Fail("INVALID_REQUEST", "path must be under Assets/ or Packages/", null, 0);
+
+            if (normalizedPath.EndsWith("/"))
+                return UacfResponse.Fail("INVALID_REQUEST", "path must point to a file, not a folder", null, 0);
+
+            if (!Path.HasExtension(normalizedPath))
+            {
+                var sourceExt = Path.GetExtension(sourcePath);
+                if (!string.IsNullOrEmpty(sourceExt))
+                    normalizedPath += sourceExt;
+                else
+                    return UacfResponse.Fail("INVALID_REQUEST", "path or sourcePath must have a file extension", null, 0);
+            }
+
+            var projectRoot = Path.GetDirectoryName(Application.dataPath);
+            var destFullPath = Path.Combine(projectRoot, normalizedPath);
+            var sourceFullPath = Path.GetFullPath(sourcePath);
+
+            if (!File.Exists(sourceFullPath))
+                return UacfResponse.Fail("NOT_FOUND", $"Source file not found: {sourcePath}", null, 0);
+
+            var assetFolder = Path.GetDirectoryName(normalizedPath)?.Replace("\\", "/");
+            if (!string.IsNullOrWhiteSpace(assetFolder) && !AssetDatabase.IsValidFolder(assetFolder))
+            {
+                if (!AssetDatabaseService.CreateFolder(assetFolder))
+                    return UacfResponse.Fail("CREATE_FAILED", $"Unable to create folder for '{normalizedPath}'", null, 0);
+            }
+
+            var existing = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(normalizedPath);
+            if (existing != null)
+            {
+                if (!overwrite)
+                    return UacfResponse.Fail("ASSET_EXISTS", $"Asset already exists at '{normalizedPath}'", "Set overwrite=true to replace", 0);
+                if (!AssetDatabase.DeleteAsset(normalizedPath))
+                    return UacfResponse.Fail("CREATE_FAILED", $"Failed to delete existing asset at '{normalizedPath}'", null, 0);
+            }
+
+            try
+            {
+                File.Copy(sourceFullPath, destFullPath, overwrite);
+                AssetDatabase.Refresh();
+                AssetDatabase.ImportAsset(normalizedPath);
+                var assetType = AssetDatabase.GetMainAssetTypeAtPath(normalizedPath)?.Name ?? "Unknown";
+                return Success(normalizedPath, assetType);
+            }
+            catch (Exception ex)
+            {
+                return UacfResponse.Fail("CREATE_FAILED", ex.Message, null, 0);
+            }
+        }
+
+        public static UacfResponse CreateFont(JObject p)
+        {
+            var path = p["path"]?.ToString();
+            var sourcePath = p["sourcePath"]?.ToString();
+            var overwrite = p["overwrite"]?.Value<bool>() ?? false;
+
+            if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(sourcePath))
+                return UacfResponse.Fail("INVALID_REQUEST", "path and sourcePath are required", null, 0);
+
+            var ext = Path.GetExtension(sourcePath).ToLowerInvariant();
+            if (ext != ".ttf" && ext != ".otf")
+                return UacfResponse.Fail("INVALID_REQUEST", "sourcePath must be a .ttf or .otf font file", null, 0);
+
+            var normalizedPath = path.Replace("\\", "/").Trim();
+            if (!normalizedPath.StartsWith("Assets/", StringComparison.Ordinal) && !normalizedPath.StartsWith("Packages/", StringComparison.Ordinal))
+                return UacfResponse.Fail("INVALID_REQUEST", "path must be under Assets/ or Packages/", null, 0);
+
+            if (!Path.HasExtension(normalizedPath))
+                normalizedPath += ext;
+
+            return CreateFromFile(new JObject
+            {
+                ["path"] = normalizedPath,
+                ["sourcePath"] = sourcePath,
+                ["overwrite"] = overwrite
+            });
+        }
+
+        public static UacfResponse CreateTMPFontAsset(JObject p)
+        {
+            var path = p["path"]?.ToString();
+            var sourceFont = p["sourceFont"]?.ToString();
+            var overwrite = p["overwrite"]?.Value<bool>() ?? false;
+
+            if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(sourceFont))
+                return UacfResponse.Fail("INVALID_REQUEST", "path and sourceFont are required", null, 0);
+
+            var font = AssetDatabase.LoadAssetAtPath<Font>(sourceFont);
+            if (font == null)
+                return UacfResponse.Fail("NOT_FOUND", $"Font not found at '{sourceFont}'", "Use asset path to an imported .ttf/.otf font", 0);
+
+            var tmpType = Type.GetType("TMPro.TMP_FontAsset, Unity.TextMeshPro");
+            if (tmpType == null)
+                return UacfResponse.Fail("TYPE_NOT_FOUND", "TextMeshPro (TMP_FontAsset) is not available", "Add com.unity.textmeshpro package", 0);
+
+            var createMethod = tmpType.GetMethod("CreateFontAsset", BindingFlags.Public | BindingFlags.Static, null,
+                new[] { typeof(Font) }, null);
+            if (createMethod == null)
+                return UacfResponse.Fail("TYPE_NOT_FOUND", "TMP_FontAsset.CreateFontAsset not found", null, 0);
+
+            return CreateAsset(path, overwrite, ".asset", assetPath =>
+            {
+                var tmpFont = createMethod.Invoke(null, new object[] { font });
+                if (tmpFont == null)
+                    return UacfResponse.Fail("CREATE_FAILED", "TMP_FontAsset.CreateFontAsset returned null", null, 0);
+                AssetDatabase.CreateAsset((UnityEngine.Object)tmpFont, assetPath);
+                return Success(assetPath, "TMP_FontAsset");
+            });
+        }
+
+        public static UacfResponse CreateRenderTexture(JObject p)
+        {
+            var path = p["path"]?.ToString();
+            var width = p["width"]?.Value<int>() ?? 256;
+            var height = p["height"]?.Value<int>() ?? 256;
+            var depth = p["depth"]?.Value<int>() ?? 24;
+            var overwrite = p["overwrite"]?.Value<bool>() ?? false;
+
+            if (string.IsNullOrWhiteSpace(path))
+                return UacfResponse.Fail("INVALID_REQUEST", "path is required", null, 0);
+
+            return CreateAsset(path, overwrite, ".renderTexture", assetPath =>
+            {
+                var rt = new RenderTexture(width, height, depth);
+                rt.Create();
+                AssetDatabase.CreateAsset(rt, assetPath);
+                return Success(assetPath, typeof(RenderTexture).FullName);
+            });
+        }
+
+        public static UacfResponse CreateCubemap(JObject p)
+        {
+            var path = p["path"]?.ToString();
+            var size = p["size"]?.Value<int>() ?? 128;
+            var overwrite = p["overwrite"]?.Value<bool>() ?? false;
+
+            if (string.IsNullOrWhiteSpace(path))
+                return UacfResponse.Fail("INVALID_REQUEST", "path is required", null, 0);
+
+            return CreateAsset(path, overwrite, ".cubemap", assetPath =>
+            {
+                var cubemap = new Cubemap(size, TextureFormat.RGBA32, false);
+                AssetDatabase.CreateAsset(cubemap, assetPath);
+                return Success(assetPath, typeof(Cubemap).FullName);
+            });
+        }
+
+        public static UacfResponse CreateAsset(JObject p)
+        {
+            var path = p["path"]?.ToString();
+            var type = p["type"]?.ToString();
+            var overwrite = p["overwrite"]?.Value<bool>() ?? false;
+
+            if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(type))
+                return UacfResponse.Fail("INVALID_REQUEST", "path and type are required", null, 0);
+
+            var typeLower = type.ToLowerInvariant();
+            switch (typeLower)
+            {
+                case "scriptableobject":
+                    var subtype = p["subtype"]?.ToString();
+                    if (string.IsNullOrWhiteSpace(subtype))
+                        return UacfResponse.Fail("INVALID_REQUEST", "subtype is required for scriptableObject", null, 0);
+                    var soParams = new JObject { ["path"] = path, ["type"] = subtype, ["overwrite"] = overwrite };
+                    if (p["properties"] is JObject props) soParams["properties"] = props;
+                    return CreateScriptableObject(soParams);
+                case "material":
+                    var matParams = new JObject { ["path"] = path, ["overwrite"] = overwrite };
+                    if (p["shader"] != null) matParams["shader"] = p["shader"];
+                    if (p["properties"] is JObject mp) matParams["properties"] = mp;
+                    return CreateMaterial(matParams);
+                case "physicmaterial":
+                    var pmParams = new JObject { ["path"] = path, ["overwrite"] = overwrite };
+                    if (p["properties"] is JObject pmp) pmParams["properties"] = pmp;
+                    return CreatePhysicMaterial(pmParams);
+                case "animationclip":
+                    var animParams = new JObject { ["path"] = path, ["overwrite"] = overwrite };
+                    if (p["wrapMode"] != null) animParams["wrapMode"] = p["wrapMode"];
+                    if (p["curves"] != null) animParams["curves"] = p["curves"];
+                    return CreateAnimationClip(animParams);
+                case "panelsettings":
+                    var panelParams = new JObject { ["path"] = path, ["overwrite"] = overwrite };
+                    if (p["properties"] is JObject pp) panelParams["properties"] = pp;
+                    return CreatePanelSettings(panelParams);
+                case "font":
+                    var fontParams = new JObject { ["path"] = path, ["overwrite"] = overwrite };
+                    if (p["sourcePath"] != null) fontParams["sourcePath"] = p["sourcePath"];
+                    else return UacfResponse.Fail("INVALID_REQUEST", "sourcePath is required for font", null, 0);
+                    return CreateFont(fontParams);
+                case "tmpfontasset":
+                    var tmpParams = new JObject { ["path"] = path, ["overwrite"] = overwrite };
+                    if (p["sourceFont"] != null) tmpParams["sourceFont"] = p["sourceFont"];
+                    else return UacfResponse.Fail("INVALID_REQUEST", "sourceFont is required for tmpFontAsset", null, 0);
+                    if (p["atlasResolution"] != null) tmpParams["atlasResolution"] = p["atlasResolution"];
+                    return CreateTMPFontAsset(tmpParams);
+                case "rendertexture":
+                    var rtParams = new JObject { ["path"] = path, ["overwrite"] = overwrite };
+                    if (p["width"] != null) rtParams["width"] = p["width"];
+                    if (p["height"] != null) rtParams["height"] = p["height"];
+                    if (p["depth"] != null) rtParams["depth"] = p["depth"];
+                    return CreateRenderTexture(rtParams);
+                case "cubemap":
+                    var cmParams = new JObject { ["path"] = path, ["overwrite"] = overwrite };
+                    if (p["size"] != null) cmParams["size"] = p["size"];
+                    return CreateCubemap(cmParams);
+                default:
+                    return UacfResponse.Fail("INVALID_REQUEST", $"Unknown type '{type}'", "Use: scriptableObject, material, physicMaterial, animationClip, panelSettings, font, tmpFontAsset, renderTexture, cubemap", 0);
+            }
+        }
+
         public static UacfResponse CreateAnimationClip(JObject p)
         {
             var path = p["path"]?.ToString();
