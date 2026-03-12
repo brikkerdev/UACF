@@ -1,0 +1,111 @@
+/* DUNGEON CRAWL — rogue-like main menu (reference: reference.html) */
+
+.root {
+  flex-grow: 1;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  padding: 24px;
+  background-color: #0a0a0c;
+  -unity-font-definition: url("/Assets/UACF/Fonts/JetBrainsMono.ttf");
+  font-size: 14px;
+}
+
+.top-section {
+  flex-direction: column;
+  flex-grow: 0;
+  flex-shrink: 0;
+}
+
+/* Header */
+.header {
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 32px;
+  margin-bottom: 32px;
+  background-color: #12121a;
+  border-width: 1px;
+  border-color: #2a2a36;
+  border-left-width: 4px;
+  border-left-color: #8b6cb8;
+  border-radius: 10px;
+}
+
+.header-title {
+  color: #e8e4f0;
+  font-size: 22px;
+  -unity-font-style: bold;
+}
+
+.header-sub {
+  color: #6a6a7a;
+  font-size: 11px;
+  margin-top: 8px;
+}
+
+/* Nav panel */
+.nav-panel {
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 32px;
+  background-color: #12121a;
+  border-width: 1px;
+  border-color: #2a2a36;
+  border-radius: 14px;
+  min-width: 260px;
+  max-width: 320px;
+  align-self: center;
+}
+
+.nav-button {
+  width: 100%;
+  height: 48px;
+  margin-bottom: 12px;
+  background-color: transparent;
+  color: #e8e4f0;
+  border-width: 1px;
+  border-color: #2a2a36;
+  border-radius: 6px;
+  font-size: 14px;
+  padding: 8px 16px;
+  -unity-font-style: normal;
+}
+
+.nav-button-last {
+  margin-bottom: 0;
+}
+
+.nav-button:hover {
+  background-color: #1a1a24;
+  border-color: #4a3a6a;
+}
+
+.nav-button:active {
+  background-color: #252530;
+  border-color: #8b6cb8;
+}
+
+.nav-button:focus {
+  border-color: #8b6cb8;
+  border-width: 2px;
+}
+
+/* Status bar */
+.status-bar {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  flex-shrink: 0;
+  background-color: #12121a;
+  border-width: 1px;
+  border-color: #2a2a36;
+  border-radius: 6px;
+}
+
+.status-text {
+  color: #6a6a7a;
+  font-size: 10px;
+}

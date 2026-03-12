@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Survival Inventory — Biometric Telemetry Reference</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --phosphor-main: #ffb300;
+      --phosphor-dim: #8a6300;
+      --bg-deep: #050300;
+      --bg-panel: #0a0804;
+      --border-phosphor: #ffb300;
+      --border-dim: #5c4200;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'JetBrains Mono', monospace; background: var(--bg-deep); color: var(--phosphor-main); padding: 24px; font-size: 14px; }
+    .root { max-width: 1200px; margin: 0 auto; }
+    .header { display: flex; justify-content: space-between; margin-bottom: 24px; }
+    .header-left, .header-right { width: 25%; }
+    .header-right { text-align: right; }
+    .header-center { text-align: center; }
+    .header-title { font-size: 12px; color: var(--phosphor-dim); }
+    .title-inverted { background: var(--phosphor-main); color: var(--bg-deep); padding: 4px 12px; margin-top: 4px; font-weight: bold; display: inline-block; }
+    .tabs-bar { display: flex; gap: 8px; padding: 8px 16px; border: 1px solid var(--border-dim); border-radius: 4px; margin-bottom: 16px; }
+    .tab { flex: 1; padding: 8px; background: transparent; color: var(--phosphor-dim); border: 1px solid transparent; border-radius: 2px; font-size: 11px; cursor: pointer; }
+    .tab--active { background: rgba(255,179,0,0.15); color: var(--phosphor-main); border-color: var(--phosphor-main); }
+    .body { display: flex; gap: 24px; }
+    .left-column { display: flex; flex-direction: column; gap: 16px; width: 220px; }
+    .panel { padding: 16px; background: var(--bg-panel); border: 1px solid var(--phosphor-main); border-radius: 4px; }
+    .panel-title { font-size: 10px; color: var(--phosphor-dim); margin-bottom: 12px; letter-spacing: 2px; }
+    .body-diagram { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .body-row { display: flex; gap: 8px; justify-content: center; }
+    .body-zone { border: 1px solid var(--phosphor-main); border-radius: 2px; background: var(--bg-deep); }
+    .zone-head { width: 52px; height: 48px; }
+    .zone-torso { width: 72px; height: 96px; }
+    .zone-arm { width: 28px; height: 72px; }
+    .zone-leg { width: 36px; height: 88px; }
+    .zone-wounded { background: rgba(204,51,51,0.35); border-color: #cc3333; }
+    .vitals { display: flex; flex-direction: column; gap: 16px; }
+    .vital-row { display: flex; flex-direction: column; gap: 4px; }
+    .vital-label { font-size: 10px; color: var(--phosphor-dim); }
+    .vital-bar { height: 14px; border: 1px solid var(--phosphor-main); background: #5c4200; overflow: hidden; }
+    .vital-bar .fill { height: 100%; }
+    .fill-health { width: 75%; background: #ff4444; }
+    .fill-hunger { width: 60%; background: #ffb300; }
+    .fill-thirst { width: 40%; background: #44aaff; }
+    .inventory-grid, .ground-grid { display: grid; grid-template-columns: repeat(6, 44px); gap: 8px; }
+    .ground-grid { grid-template-columns: repeat(4, 44px); }
+    .slot { width: 44px; height: 44px; border: 1px solid var(--border-dim); border-radius: 2px; background: var(--bg-deep); }
+    .inventory-panel { flex: 1; min-width: 280px; }
+    .ground-panel { width: 240px; }
+  </style>
+</head>
+<body>
+  <div class="root">
+    <header class="header">
+      <div class="header-left">
+        <div>Node: SURVIVOR</div>
+        <div>Status: NOMINAL</div>
+      </div>
+      <div class="header-center">
+        <div class="header-title">Biometric Telemetry Utility</div>
+        <div class="title-inverted">INVENTORY</div>
+      </div>
+      <div class="header-right">--:--:--</div>
+    </header>
+    <div class="tabs-bar">
+      <button class="tab tab--active">CRAFTING</button>
+      <button class="tab">SKILLS</button>
+      <button class="tab">FACTIONS</button>
+    </div>
+    <div class="body">
+      <div class="left-column">
+        <div class="panel">
+          <div class="panel-title">CONDITION</div>
+          <div class="body-diagram">
+            <div class="body-row"><div class="body-zone zone-head"></div></div>
+            <div class="body-row">
+              <div class="body-zone zone-arm zone-wounded"></div>
+              <div class="body-zone zone-torso zone-wounded"></div>
+              <div class="body-zone zone-arm"></div>
+            </div>
+            <div class="body-row">
+              <div class="body-zone zone-leg"></div>
+              <div class="body-zone zone-leg"></div>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-title">VITALS</div>
+          <div class="vitals">
+            <div class="vital-row">
+              <div class="vital-label">HEALTH</div>
+              <div class="vital-bar"><div class="fill fill-health"></div></div>
+            </div>
+            <div class="vital-row">
+              <div class="vital-label">HUNGER</div>
+              <div class="vital-bar"><div class="fill fill-hunger"></div></div>
+            </div>
+            <div class="vital-row">
+              <div class="vital-label">THIRST</div>
+              <div class="vital-bar"><div class="fill fill-thirst"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel inventory-panel">
+        <div class="panel-title">INVENTORY</div>
+        <div class="inventory-grid">
+          <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+          <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+          <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+          <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+        </div>
+      </div>
+      <div class="panel ground-panel">
+        <div class="panel-title">GROUND</div>
+        <div class="ground-grid">
+          <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+          <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+          <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+  <Style src="SurvivalInventory.uss" />
+  <ui:VisualElement name="root" class="root">
+    <!-- Header — Biometric Telemetry style -->
+    <ui:VisualElement name="header" class="header">
+      <ui:VisualElement name="header-left" class="header-left">
+        <ui:Label name="label-node" class="header-label" text="Node: SURVIVOR" />
+        <ui:Label name="label-status" class="header-label" text="Status: NOMINAL" />
+      </ui:VisualElement>
+      <ui:VisualElement name="header-center" class="header-center">
+        <ui:Label name="header-title" class="header-title" text="Biometric Telemetry Utility" />
+        <ui:Label name="title-inverted" class="title-inverted" text="INVENTORY" />
+      </ui:VisualElement>
+      <ui:VisualElement name="header-right" class="header-right">
+        <ui:Label name="label-clock" class="header-label" text="--:--:--" />
+      </ui:VisualElement>
+    </ui:VisualElement>
+
+    <!-- Tabs: Crafting, Skills, Factions -->
+    <ui:VisualElement name="tabs-bar" class="tabs-bar">
+      <ui:Button name="tab-crafting" class="tab tab--active" text="CRAFTING" />
+      <ui:Button name="tab-skills" class="tab" text="SKILLS" />
+      <ui:Button name="tab-factions" class="tab" text="FACTIONS" />
+    </ui:VisualElement>
+
+    <!-- Main body -->
+    <ui:VisualElement name="body" class="body">
+      <!-- Left: Conditions + Vitals stacked -->
+      <ui:VisualElement name="left-column" class="left-column">
+        <ui:VisualElement name="body-panel" class="body-panel">
+          <ui:Label name="body-title" class="panel-title" text="CONDITION" />
+          <ui:VisualElement name="body-diagram" class="body-diagram">
+            <ui:VisualElement name="body-row-head" class="body-row">
+              <ui:VisualElement name="zone-head" class="body-zone body-zone--head" />
+            </ui:VisualElement>
+            <ui:VisualElement name="body-row-arms" class="body-row body-row--arms">
+              <ui:VisualElement name="zone-arm-left" class="body-zone body-zone--arm body-zone--left body-zone--wounded" />
+              <ui:VisualElement name="zone-torso" class="body-zone body-zone--torso body-zone--wounded" />
+              <ui:VisualElement name="zone-arm-right" class="body-zone body-zone--arm body-zone--right" />
+            </ui:VisualElement>
+            <ui:VisualElement name="body-row-legs" class="body-row">
+              <ui:VisualElement name="zone-leg-left" class="body-zone body-zone--leg body-zone--left" />
+              <ui:VisualElement name="zone-leg-right" class="body-zone body-zone--leg body-zone--right body-zone--critical" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="stats-panel" class="stats-panel">
+          <ui:Label name="stats-title" class="panel-title" text="VITALS" />
+          <ui:VisualElement name="vitals" class="vitals">
+            <ui:VisualElement name="vital-health" class="vital-row">
+              <ui:Label name="label-health" class="vital-label" text="HEALTH" />
+              <ui:ProgressBar name="bar-health" class="vital-bar vital-bar--health" low-value="0" high-value="100" value="75" />
+            </ui:VisualElement>
+            <ui:VisualElement name="vital-hunger" class="vital-row">
+              <ui:Label name="label-hunger" class="vital-label" text="HUNGER" />
+              <ui:ProgressBar name="bar-hunger" class="vital-bar vital-bar--hunger" low-value="0" high-value="100" value="60" />
+            </ui:VisualElement>
+            <ui:VisualElement name="vital-thirst" class="vital-row">
+              <ui:Label name="label-thirst" class="vital-label" text="THIRST" />
+              <ui:ProgressBar name="bar-thirst" class="vital-bar vital-bar--thirst" low-value="0" high-value="100" value="40" />
+            </ui:VisualElement>
+          </ui:VisualElement>
+        </ui:VisualElement>
+      </ui:VisualElement>
+
+      <!-- Center: Inventory -->
+      <ui:VisualElement name="inventory-panel" class="inventory-panel">
+        <ui:Label name="inventory-title" class="panel-title" text="INVENTORY" />
+        <ui:VisualElement name="inventory-grid" class="inventory-grid">
+          <ui:VisualElement name="slot-0" class="inventory-slot" />
+          <ui:VisualElement name="slot-1" class="inventory-slot" />
+          <ui:VisualElement name="slot-2" class="inventory-slot" />
+          <ui:VisualElement name="slot-3" class="inventory-slot" />
+          <ui:VisualElement name="slot-4" class="inventory-slot" />
+          <ui:VisualElement name="slot-5" class="inventory-slot" />
+          <ui:VisualElement name="slot-6" class="inventory-slot" />
+          <ui:VisualElement name="slot-7" class="inventory-slot" />
+          <ui:VisualElement name="slot-8" class="inventory-slot" />
+          <ui:VisualElement name="slot-9" class="inventory-slot" />
+          <ui:VisualElement name="slot-10" class="inventory-slot" />
+          <ui:VisualElement name="slot-11" class="inventory-slot" />
+          <ui:VisualElement name="slot-12" class="inventory-slot" />
+          <ui:VisualElement name="slot-13" class="inventory-slot" />
+          <ui:VisualElement name="slot-14" class="inventory-slot" />
+          <ui:VisualElement name="slot-15" class="inventory-slot" />
+          <ui:VisualElement name="slot-16" class="inventory-slot" />
+          <ui:VisualElement name="slot-17" class="inventory-slot" />
+          <ui:VisualElement name="slot-18" class="inventory-slot" />
+          <ui:VisualElement name="slot-19" class="inventory-slot" />
+          <ui:VisualElement name="slot-20" class="inventory-slot" />
+          <ui:VisualElement name="slot-21" class="inventory-slot" />
+          <ui:VisualElement name="slot-22" class="inventory-slot" />
+          <ui:VisualElement name="slot-23" class="inventory-slot" />
+        </ui:VisualElement>
+      </ui:VisualElement>
+
+      <!-- Right: Items on ground -->
+      <ui:VisualElement name="ground-panel" class="ground-panel">
+        <ui:Label name="ground-title" class="panel-title" text="GROUND" />
+        <ui:VisualElement name="ground-grid" class="ground-grid">
+          <ui:VisualElement name="ground-slot-0" class="inventory-slot" />
+          <ui:VisualElement name="ground-slot-1" class="inventory-slot" />
+          <ui:VisualElement name="ground-slot-2" class="inventory-slot" />
+          <ui:VisualElement name="ground-slot-3" class="inventory-slot" />
+          <ui:VisualElement name="ground-slot-4" class="inventory-slot" />
+          <ui:VisualElement name="ground-slot-5" class="inventory-slot" />
+          <ui:VisualElement name="ground-slot-6" class="inventory-slot" />
+          <ui:VisualElement name="ground-slot-7" class="inventory-slot" />
+          <ui:VisualElement name="ground-slot-8" class="inventory-slot" />
+          <ui:VisualElement name="ground-slot-9" class="inventory-slot" />
+          <ui:VisualElement name="ground-slot-10" class="inventory-slot" />
+          <ui:VisualElement name="ground-slot-11" class="inventory-slot" />
+        </ui:VisualElement>
+      </ui:VisualElement>
+    </ui:VisualElement>
+  </ui:VisualElement>
+</ui:UXML>

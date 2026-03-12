@@ -1,0 +1,21 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+  <Style src="RogueLikeMainMenu.uss" />
+  <ui:VisualElement name="root" class="root">
+    <ui:VisualElement name="top-section" class="top-section">
+      <ui:VisualElement name="header" class="header">
+        <ui:Label name="header-title" class="header-title" text="DUNGEON CRAWL" />
+        <ui:Label name="header-sub" class="header-sub" text="ROGUE-LIKE • PERMADEATH" />
+      </ui:VisualElement>
+      <ui:VisualElement name="nav-panel" class="nav-panel">
+        <ui:Button name="btn-new-game" class="nav-button" text="NEW GAME" />
+        <ui:Button name="btn-continue" class="nav-button" text="CONTINUE" />
+        <ui:Button name="btn-settings" class="nav-button" text="SETTINGS" />
+        <ui:Button name="btn-quit" class="nav-button nav-button-last" text="QUIT" />
+      </ui:VisualElement>
+    </ui:VisualElement>
+    <ui:VisualElement name="status-bar" class="status-bar">
+      <ui:Label name="status-left" class="status-text" text="PC • LANDSCAPE" />
+      <ui:Label name="status-right" class="status-text" text="READY" />
+    </ui:VisualElement>
+  </ui:VisualElement>
+</ui:UXML>

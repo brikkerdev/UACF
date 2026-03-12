@@ -1,0 +1,398 @@
+/* Survival Inventory — Biometric Telemetry style (phosphor CRT reference) */
+
+/* Design tokens from reference */
+.root {
+  --phosphor-main: #ffb300;
+  --phosphor-dim: #8a6300;
+  --phosphor-glow: rgba(255, 179, 0, 0.4);
+  --bg-deep: #050300;
+  --bg-panel: #0a0804;
+  --border-phosphor: #ffb300;
+  --border-dim: #5c4200;
+  --color-text: #ffb300;
+  --color-text-dim: #8a6300;
+  --color-health: #ff4444;
+  --color-health-dim: #661616;
+  --color-hunger: #ffb300;
+  --color-hunger-dim: #5c4200;
+  --color-thirst: #44aaff;
+  --color-thirst-dim: #164466;
+  --color-wound: #cc3333;
+  --color-wound-subtle: rgba(204, 51, 51, 0.35);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --size-slot: 52px;
+  --duration-fast: 150ms;
+}
+
+/* Адаптивный root — заполняет весь экран, масштабируется через PanelSettings */
+.root {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  padding: 32px;
+  background-color: var(--bg-deep);
+  -unity-font-definition: url("/Assets/UACF/Fonts/JetBrainsMono.ttf");
+  font-size: 16px;
+  color: var(--phosphor-main);
+}
+
+/* Header — reference style */
+.header {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-shrink: 0;
+  margin-bottom: var(--space-6);
+}
+
+.header-left,
+.header-right {
+  width: 25%;
+  flex-direction: column;
+}
+
+.header-left > *,
+.header-right > * {
+  margin-bottom: 2px;
+}
+
+.header-left > *:last-child,
+.header-right > *:last-child {
+  margin-bottom: 0;
+}
+
+.header-right {
+  align-items: flex-end;
+}
+
+.header-center {
+  flex-direction: column;
+  align-items: center;
+}
+
+.header-label {
+  color: var(--phosphor-main);
+  font-size: 12px;
+}
+
+.header-title {
+  font-size: 12px;
+  color: var(--phosphor-dim);
+}
+
+.title-inverted {
+  background-color: var(--phosphor-main);
+  color: var(--bg-deep);
+  padding: 4px 12px;
+  margin-top: 4px;
+  font-size: 14px;
+  -unity-font-style: bold;
+}
+
+/* Tabs as module headers */
+.tabs-bar {
+  flex-direction: row;
+  flex-shrink: 0;
+  margin-bottom: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border-width: 1px;
+  border-color: var(--border-dim);
+  border-radius: var(--radius-sm);
+}
+
+.tab {
+  flex-grow: 1;
+  height: 36px;
+  margin-right: var(--space-2);
+  background-color: transparent;
+  color: var(--phosphor-dim);
+  border-width: 1px;
+  border-color: transparent;
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  -unity-font-style: normal;
+}
+
+.tab:last-child {
+  margin-right: 0;
+}
+
+.tab:hover {
+  color: var(--phosphor-main);
+  border-color: var(--border-dim);
+}
+
+.tab--active {
+  background-color: rgba(255, 179, 0, 0.15);
+  color: var(--phosphor-main);
+  border-color: var(--phosphor-main);
+}
+
+/* Body layout — растягивается на всё доступное пространство */
+.body {
+  flex-grow: 1;
+  flex-direction: row;
+  align-items: stretch;
+  min-height: 0;
+  flex-shrink: 1;
+}
+
+/* Left column: Conditions + Vitals — ~15% ширины, min для читаемости */
+.left-column {
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 18%;
+  min-width: 260px;
+  max-width: 320px;
+  margin-right: var(--space-8);
+}
+
+.left-column > * {
+  margin-bottom: var(--space-4);
+}
+
+.left-column > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Panels — chart-frame style */
+.inventory-panel,
+.body-panel,
+.stats-panel,
+.ground-panel {
+  flex-direction: column;
+  padding: var(--space-4);
+  background-color: var(--bg-panel);
+  border-width: 1px;
+  border-color: var(--border-phosphor);
+  border-radius: var(--radius-md);
+}
+
+.body-panel {
+  flex-shrink: 0;
+}
+
+.stats-panel {
+  flex-grow: 1;
+  min-height: 0;
+}
+
+.inventory-panel {
+  flex-grow: 1;
+  flex-shrink: 1;
+  min-width: 30%;
+  margin-right: var(--space-6);
+}
+
+.ground-panel {
+  flex-shrink: 0;
+  width: 16%;
+  min-width: 220px;
+  max-width: 320px;
+}
+
+.panel-title {
+  flex-shrink: 0;
+  margin-bottom: var(--space-3);
+  color: var(--phosphor-dim);
+  font-size: 10px;
+  -unity-font-style: bold;
+  letter-spacing: 2px;
+}
+
+/* Body diagram — realistic human proportions (front view) */
+.body-diagram {
+  flex-direction: column;
+  align-items: center;
+  flex-grow: 1;
+}
+
+.body-diagram > * {
+  margin-bottom: var(--space-2);
+}
+
+.body-diagram > *:last-child {
+  margin-bottom: 0;
+}
+
+.body-row {
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+}
+
+.body-row > * {
+  margin-right: var(--space-2);
+}
+
+.body-row > *:last-child {
+  margin-right: 0;
+}
+
+.body-row--arms > * {
+  margin-right: var(--space-1);
+}
+
+.body-zone {
+  border-width: 1px;
+  border-color: var(--border-phosphor);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-deep);
+  transition-property: background-color, border-color;
+  transition-duration: var(--duration-fast);
+}
+
+.body-zone:hover {
+  border-color: var(--phosphor-main);
+  background-color: rgba(255, 179, 0, 0.08);
+}
+
+/* Realistic scale for FullHD: head ~18%, torso ~35%, arms ~30%, legs ~45% */
+.body-zone--head {
+  width: 64px;
+  height: 56px;
+}
+
+.body-zone--torso {
+  width: 88px;
+  height: 112px;
+}
+
+.body-zone--arm {
+  width: 34px;
+  height: 84px;
+}
+
+.body-zone--leg {
+  width: 44px;
+  height: 100px;
+}
+
+.body-zone--wounded {
+  background-color: var(--color-wound-subtle);
+  border-color: var(--color-wound);
+}
+
+.body-zone--critical {
+  background-color: var(--color-wound);
+  border-color: #ff5555;
+}
+
+/* Vitals — chart-frame bar style */
+.vitals {
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.vitals > * {
+  margin-bottom: var(--space-4);
+}
+
+.vitals > *:last-child {
+  margin-bottom: 0;
+}
+
+.vital-row {
+  flex-direction: column;
+}
+
+.vital-row > * {
+  margin-bottom: var(--space-1);
+}
+
+.vital-row > *:last-child {
+  margin-bottom: 0;
+}
+
+.vital-label {
+  color: var(--phosphor-dim);
+  font-size: 10px;
+  -unity-font-style: bold;
+  letter-spacing: 1px;
+}
+
+.vital-bar {
+  height: 14px;
+  border-radius: 0;
+  border-width: 1px;
+  border-color: var(--phosphor-main);
+  border-top-width: 1px;
+  border-bottom-width: 1px;
+}
+
+.vital-bar--health .unity-progress-bar__background {
+  background-color: var(--color-health-dim);
+  border-radius: 0;
+}
+
+.vital-bar--health .unity-progress-bar__progress {
+  background-color: var(--color-health);
+  border-radius: 0;
+}
+
+.vital-bar--hunger .unity-progress-bar__background {
+  background-color: var(--color-hunger-dim);
+  border-radius: 0;
+}
+
+.vital-bar--hunger .unity-progress-bar__progress {
+  background-color: var(--color-hunger);
+  border-radius: 0;
+}
+
+.vital-bar--thirst .unity-progress-bar__background {
+  background-color: var(--color-thirst-dim);
+  border-radius: 0;
+}
+
+.vital-bar--thirst .unity-progress-bar__progress {
+  background-color: var(--color-thirst);
+  border-radius: 0;
+}
+
+/* Inventory slots — phosphor bordered */
+.inventory-grid,
+.ground-grid {
+  flex-direction: row;
+  flex-wrap: wrap;
+  flex-grow: 1;
+  align-content: flex-start;
+}
+
+.inventory-grid .inventory-slot,
+.ground-grid .inventory-slot {
+  margin-right: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.inventory-slot {
+  flex-shrink: 0;
+  width: var(--size-slot);
+  height: var(--size-slot);
+  min-width: var(--size-slot);
+  min-height: var(--size-slot);
+  background-color: var(--bg-deep);
+  border-width: 1px;
+  border-color: var(--border-dim);
+  border-radius: var(--radius-sm);
+  transition-property: background-color, border-color;
+  transition-duration: var(--duration-fast);
+}
+
+.inventory-slot:hover {
+  border-color: var(--phosphor-main);
+  background-color: rgba(255, 179, 0, 0.06);
+}

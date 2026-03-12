@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rogue-Like Main Menu — Reference</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-deep: #0a0a0c;
+      --bg-panel: #12121a;
+      --bg-hover: #1a1a24;
+      --border-dim: #2a2a36;
+      --border-accent: #4a3a6a;
+      --text-dim: #6a6a7a;
+      --text-bright: #e8e4f0;
+      --accent: #8b6cb8;
+      --accent-glow: rgba(139, 108, 184, 0.3);
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'JetBrains Mono', monospace;
+      background: var(--bg-deep);
+      color: var(--text-bright);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .root {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      max-width: 480px;
+      min-height: 90vh;
+    }
+
+    .header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 32px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+      border-left: 4px solid var(--accent);
+      border-radius: var(--radius-md);
+      margin-bottom: 32px;
+      width: 100%;
+    }
+
+    .header-title {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: var(--text-bright);
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .header-sub {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 8px;
+      letter-spacing: 0.2em;
+    }
+
+    .nav-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      padding: 28px 32px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-lg);
+      width: 100%;
+      max-width: 320px;
+    }
+
+    .nav-button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 14px 24px;
+      margin-bottom: 12px;
+      background: transparent;
+      color: var(--text-bright);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .nav-button:last-child {
+      margin-bottom: 0;
+    }
+
+    .nav-button:hover {
+      background: var(--bg-hover);
+      border-color: var(--border-accent);
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .nav-button:active {
+      background: #252530;
+      border-color: var(--accent);
+    }
+
+    .nav-button:focus {
+      outline: none;
+      border-color: var(--accent);
+      border-width: 2px;
+    }
+
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border-dim);
+      border-radius: var(--radius-sm);
+      width: 100%;
+      margin-top: 24px;
+    }
+
+    .status-text {
+      font-size: 10px;
+      color: var(--text-dim);
+      letter-spacing: 0.1em;
+    }
+  </style>
+</head>
+<body>
+  <div class="root">
+    <div class="top-section">
+      <header class="header">
+        <h1 class="header-title">DUNGEON CRAWL</h1>
+        <span class="header-sub">ROGUE-LIKE • PERMADEATH</span>
+      </header>
+      <nav class="nav-panel">
+        <button class="nav-button">NEW GAME</button>
+        <button class="nav-button">CONTINUE</button>
+        <button class="nav-button">SETTINGS</button>
+        <button class="nav-button">QUIT</button>
+      </nav>
+    </div>
+    <footer class="status-bar">
+      <span class="status-text">PC • LANDSCAPE</span>
+      <span class="status-text">READY</span>
+    </footer>
+  </div>
+</body>
+</html>
